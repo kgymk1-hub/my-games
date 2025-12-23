@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>5x5 ライツアウト</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #20242b;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .game-container {
+      background: #2a2f38;
+      padding: 20px 18px;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+      width: 330px;
+      text-align: center;
+      color: #e7e7e7;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    /* OFF（消灯） */
+    .cell {
+      width: 55px;
+      height: 55px;
+      border-radius: 10px;
+      cursor: pointer;
+      background: linear-gradient(145deg, #1b1d22, #262a31);
+      box-shadow:
+        inset 0 0 6px rgba(0,0,0,0.6),
+        0 0 5px rgba(0,0,0,0.3);
+      transition: 0.15s ease;
+    }
+
+    /* ON（点灯） */
+    .cell.on {
+      background: radial-gradient(circle at center,
+        #ffffff 0%,
+        #e6e6ff 30%,
+        #b7c7ff 60%,
+        #7d8eee 100%);
+      box-shadow:
+        0 0 15px rgba(255,255,255,0.8),
+        0 0 30px rgba(150,160,255,0.5),
+        inset 0 0 8px rgba(255,255,255,0.9);
+    }
+
+    .cell:active {
+      transform: scale(0.95);
+    }
+
+    .controls {
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background: #5f7cff;
+      color: #fff;
+      transition: 0.15s ease;
+      box-shadow: 0 3px 8px rgba(95,124,255,0.4);
+    }
+
+    button:active {
+      transform: scale(0.96);
+      box-shadow: none;
+    }
+
+    button.secondary {
+      background: #404552;
+      color: #ccc;
+      box-shadow: none;
+    }
+
+    .message {
+      font-size: 0.9rem;
+      min-height: 1.3em;
+      margin-top: 10px;
+    }
+
+    .message.clear {
+      color: #7cff9f;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>5×5 ライツアウト</h1>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="controls">
+      <div>手数：<span id="moveCount">0</span></div>
+      <div>
+        <button id="newGameBtn">シャッフル</button>
+        <button id="clearBtn" class="secondary">全消灯</button>
+      </div>
+    </div>
+
+    <div id="message" class="message"></div>
+  </div>
+
+  <script>
+    const SIZE = 5;
+    let board = [];
+    let moveCount = 0;
+
+    const gridEl = document.getElementById("grid");
+    const moveCountEl = document.getElementById("moveCount");
+    const messageEl = document.getElementById("message");
+    const newGameBtn = document.getElementById("newGameBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    function createGrid() {
+      gridEl.innerHTML = "";
+      board = [];
+
+      for (let r = 0; r < SIZE; r++) {
+        const row = [];
+        for (let c = 0; c < SIZE; c++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.addEventListener("click", onCellClick);
+          gridEl.appendChild(cell);
+          row.push(false);
+        }
+        board.push(row);
+      }
+    }
+
+    function resetMoves() {
+      moveCount = 0;
+      moveCountEl.textContent = "0";
+      messageEl.textContent = "";
+      messageEl.className = "message";
+    }
+
+    function toggleCell(r, c) {
+      if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return;
+      board[r][c] = !board[r][c];
+      updateCellView(r, c);
+    }
+
+    function updateCellView(r, c) {
+      const index = r * SIZE + c;
+      const cell = gridEl.children[index];
+      if (board[r][c]) {
+        cell.classList.add("on");
+      } else {
+        cell.classList.remove("on");
+      }
+    }
+
+    function onCellClick(e) {
+      const r = parseInt(e.currentTarget.dataset.row);
+      const c = parseInt(e.currentTarget.dataset.col);
+
+      applyMove(r, c, true);
+    }
+
+    function applyMove(r, c, countAsMove) {
+      toggleCell(r, c);
+      toggleCell(r - 1, c);
+      toggleCell(r + 1, c);
+      toggleCell(r, c - 1);
+      toggleCell(r, c + 1);
+
+      if (countAsMove) {
+        moveCount++;
+        moveCountEl.textContent = moveCount;
+        checkClear();
+      }
+    }
+
+    function checkClear() {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (board[r][c]) return;
+        }
+      }
+      messageEl.textContent = `クリア！ おめでとう（${moveCount}手）`;
+      messageEl.className = "message clear";
+    }
+
+    function setAllOff() {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          board[r][c] = false;
+          updateCellView(r, c);
+        }
+      }
+      resetMoves();
+    }
+
+    function randomizeBoard() {
+      setAllOff();
+      const randomMoves = 10 + Math.floor(Math.random() * 15);
+      for (let i = 0; i < randomMoves; i++) {
+        const r = Math.floor(Math.random() * SIZE);
+        const c = Math.floor(Math.random() * SIZE);
+        applyMove(r, c, false);
+      }
+      resetMoves();
+    }
+
+    newGameBtn.addEventListener("click", randomizeBoard);
+    clearBtn.addEventListener("click", setAllOff);
+
+    createGrid();
+    randomizeBoard();
+  </script>
+</body>
+  </html>
