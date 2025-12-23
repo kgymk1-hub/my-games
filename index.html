@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ブラウザゲーム集</title>
+  <style>
+    body{
+      margin:0;
+      font-family:system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:#eef2ff;
+      color:#111827;
+    }
+    .wrap{
+      max-width:720px;
+      margin:0 auto;
+      padding:20px;
+    }
+    header{
+      background:#ffffff;
+      border-radius:16px;
+      padding:16px 18px;
+      box-shadow:0 8px 20px rgba(0,0,0,.08);
+      margin-bottom:14px;
+    }
+    h1{
+      margin:0 0 6px;
+      font-size:1.25rem;
+    }
+    .note{
+      margin:0;
+      font-size:.9rem;
+      color:#4b5563;
+      line-height:1.45;
+    }
+    .grid{
+      display:grid;
+      gap:12px;
+      grid-template-columns:1fr;
+    }
+    @media (min-width:720px){
+      .grid{ grid-template-columns:1fr 1fr; }
+    }
+    .card{
+      background:#fff;
+      border-radius:16px;
+      padding:14px 14px 12px;
+      box-shadow:0 8px 20px rgba(0,0,0,.08);
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .title{
+      font-weight:700;
+      font-size:1.05rem;
+      margin:0;
+    }
+    .desc{
+      margin:0;
+      color:#4b5563;
+      font-size:.92rem;
+      line-height:1.5;
+      flex:1;
+    }
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    a.btn{
+      display:inline-block;
+      text-decoration:none;
+      background:#111827;
+      color:#fff;
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:650;
+      font-size:.95rem;
+      white-space:nowrap;
+    }
+    .tag{
+      font-size:.8rem;
+      color:#6b7280;
+    }
+    footer{
+      margin-top:14px;
+      color:#6b7280;
+      font-size:.85rem;
+      text-align:center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>ブラウザゲーム集</h1>
+      <p class="note">
+        ここからゲームを選んで遊べます。<br>
+        ※ハイスコアは各自の端末・ブラウザにローカル保存（localStorage）されます。
+      </p>
+    </header>
+
+    <main class="grid" id="gameList"></main>
+
+    <footer>
+      更新する時：gamesフォルダに追加 → 下の「games 配列」に1件追加
+    </footer>
+  </div>
+
+  <script>
+    // ▼▼▼ ここだけ増やせばメニューに自動で追加されます ▼▼▼
+    const games = [
+      {
+        title: "10秒チャレンジ",
+        desc: "体感10秒を狙うシンプルゲーム。誤差が小さいほど高スコア。",
+        path: "games/10sec/index.html",
+        tag: "反射・集中"
+      },
+      // 例：ゲームを増やすときはこの形で1件追加
+      // {
+      //   title: "連打ゲーム",
+      //   desc: "10秒間で何回クリックできる？",
+      //   path: "games/clicker/index.html",
+      //   tag: "連打"
+      // },
+    ];
+    // ▲▲▲ ここだけ ▲▲▲
+
+    const list = document.getElementById("gameList");
+    games.forEach(g => {
+      const card = document.createElement("section");
+      card.className = "card";
+      card.innerHTML = `
+        <p class="title">${escapeHtml(g.title)}</p>
+        <p class="desc">${escapeHtml(g.desc)}</p>
+        <div class="row">
+          <span class="tag">${escapeHtml(g.tag || "")}</span>
+          <a class="btn" href="${g.path}">あそぶ</a>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, ch => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[ch]));
+    }
+  </script>
+</body>
+</html>
