@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>4桁ヒット＆ブローゲーム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at top, #eef3ff, #cfd8e3);
+    }
+
+    .game-container {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+      padding: 24px 20px;
+      max-width: 480px;
+      width: 90%;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 8px;
+      text-align: center;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #555;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .rules {
+      font-size: 0.8rem;
+      color: #444;
+      background: #f5f7fb;
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .rules ul {
+      padding-left: 1.2em;
+      margin: 4px 0 0;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .input-area input[type="text"] {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 1.1rem;
+      text-align: center;
+      border-radius: 8px;
+      border: 1px solid #c4c9d6;
+      outline: none;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+
+    .input-area input[type="text"]:focus {
+      border-color: #4b6fff;
+      box-shadow: 0 0 0 2px rgba(75, 111, 255, 0.2);
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.05s ease, box-shadow 0.05s ease, opacity 0.15s;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+      box-shadow: none;
+    }
+
+    .primary-btn {
+      background: #4b6fff;
+      color: #fff;
+      box-shadow: 0 4px 10px rgba(75, 111, 255, 0.45);
+    }
+
+    .secondary-btn {
+      background: #e4e7f2;
+      color: #333;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 6px;
+    }
+
+    .status {
+      font-size: 0.8rem;
+      color: #555;
+    }
+
+    .message {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      min-height: 1.2em;
+    }
+
+    .message.ok {
+      color: #0c8a3e;
+    }
+
+    .message.error {
+      color: #c0392b;
+    }
+
+    .log {
+      border-top: 1px solid #dde1ee;
+      padding-top: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+
+    .log-header,
+    .log-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1.3fr 1.3fr;
+      gap: 4px;
+      align-items: center;
+      padding: 3px 0;
+    }
+
+    .log-header {
+      font-weight: 600;
+      border-bottom: 1px solid #dde1ee;
+      margin-bottom: 2px;
+    }
+
+    .log-row:nth-child(even) {
+      background: #f7f8fc;
+      border-radius: 6px;
+      padding-inline: 4px;
+    }
+
+    .answer-hint {
+      font-size: 0.75rem;
+      color: #777;
+      text-align: right;
+      margin-top: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .answer-hint span {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>4桁ヒット＆ブロー</h1>
+    <p class="subtitle">隠された4桁の数字を推理で当ててください</p>
+
+    <div class="rules">
+      <strong>ルール</strong>
+      <ul>
+        <li>相手の「4桁の数字」を当てるゲームです。</li>
+        <li>同じ数字は1回だけ使われます（重複なし）。</li>
+        <li>先頭は0ではありません（1000〜9999）。</li>
+        <li>位置も数字も一致：<strong>ヒット</strong></li>
+        <li>数字は合っているが位置が違う：<strong>ブロー</strong></li>
+      </ul>
+    </div>
+
+    <div class="input-area">
+      <input
+        id="guessInput"
+        type="text"
+        maxlength="4"
+        autocomplete="off"
+        placeholder="例）1234"
+      />
+      <button id="guessButton" class="primary-btn">判定</button>
+    </div>
+
+    <div class="controls">
+      <div class="status">
+        試行回数：<span id="attemptCount">0</span> 回
+      </div>
+      <div>
+        <button id="resetButton" class="secondary-btn">リセット</button>
+      </div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <div class="log">
+      <div class="log-header">
+        <div>#</div>
+        <div>予想</div>
+        <div>ヒット</div>
+        <div>ブロー</div>
+      </div>
+      <div id="logBody"></div>
+    </div>
+
+    <div class="answer-hint" id="showAnswerHint">
+      （どうしても分からないときは <span>答えを見る</span>）
+    </div>
+  </div>
+
+  <script>
+    let secretNumber = "";
+    let attempts = 0;
+    let gameOver = false;
+
+    function generateSecret() {
+      const digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+      let secret = "";
+
+      // 1桁目：1〜9（0から始まらないように）
+      const firstIndex = Math.floor(Math.random() * 9) + 1; // 1〜9
+      secret += digits[firstIndex];
+      digits.splice(firstIndex, 1);
+
+      // 残り3桁：重複なしでランダムに選ぶ
+      for (let i = 0; i < 3; i++) {
+        const idx = Math.floor(Math.random() * digits.length);
+        secret += digits[idx];
+        digits.splice(idx, 1);
+      }
+      return secret;
+    }
+
+    function resetGame() {
+      secretNumber = generateSecret();
+      attempts = 0;
+      gameOver = false;
+
+      document.getElementById("attemptCount").textContent = "0";
+      document.getElementById("guessInput").value = "";
+      document.getElementById("guessInput").disabled = false;
+      document.getElementById("guessButton").disabled = false;
+      document.getElementById("message").textContent = "";
+      document.getElementById("message").className = "message";
+      document.getElementById("logBody").innerHTML = "";
+
+      // デバッグ用に答えを見たい場合は、下の行のコメントを外す
+      // console.log("Secret:", secretNumber);
+    }
+
+    function validateGuess(guess) {
+      if (guess.length !== 4) {
+        return "4桁の数字を入力してください。";
+      }
+      if (!/^\d{4}$/.test(guess)) {
+        return "数字のみを入力してください。";
+      }
+      if (guess[0] === "0") {
+        return "先頭は0以外にしてください。";
+      }
+      // 重複チェック
+      const set = new Set(guess.split(""));
+      if (set.size !== 4) {
+        return "同じ数字を重複させずに入力してください。";
+      }
+      return "";
+    }
+
+    function judge(guess, secret) {
+      let hits = 0;
+      let blows = 0;
+
+      for (let i = 0; i < 4; i++) {
+        if (guess[i] === secret[i]) {
+          hits++;
+        } else if (secret.includes(guess[i])) {
+          blows++;
+        }
+      }
+      return { hits, blows };
+    }
+
+    function addLogRow(guess, hits, blows) {
+      const logBody = document.getElementById("logBody");
+      const row = document.createElement("div");
+      row.className = "log-row";
+
+      const idxCell = document.createElement("div");
+      idxCell.textContent = attempts;
+
+      const guessCell = document.createElement("div");
+      guessCell.textContent = guess;
+
+      const hitCell = document.createElement("div");
+      hitCell.textContent = hits;
+
+      const blowCell = document.createElement("div");
+      blowCell.textContent = blows;
+
+      row.appendChild(idxCell);
+      row.appendChild(guessCell);
+      row.appendChild(hitCell);
+      row.appendChild(blowCell);
+
+      logBody.prepend(row); // 新しいものを上に
+    }
+
+    function handleGuess() {
+      if (gameOver) return;
+
+      const input = document.getElementById("guessInput");
+      const messageEl = document.getElementById("message");
+
+      const rawGuess = input.value.trim();
+      const error = validateGuess(rawGuess);
+
+      if (error) {
+        messageEl.textContent = error;
+        messageEl.className = "message error";
+        return;
+      }
+
+      attempts++;
+      document.getElementById("attemptCount").textContent = attempts.toString();
+
+      const result = judge(rawGuess, secretNumber);
+      addLogRow(rawGuess, result.hits, result.blows);
+
+      if (result.hits === 4) {
+        messageEl.textContent = `正解！ ${attempts}回目で当てました。`;
+        messageEl.className = "message ok";
+        gameOver = true;
+        input.disabled = true;
+        document.getElementById("guessButton").disabled = true;
+      } else {
+        messageEl.textContent = `ヒント：ヒット ${result.hits}、ブロー ${result.blows}`;
+        messageEl.className = "message";
+      }
+
+      input.value = "";
+      input.focus();
+    }
+
+    // イベント設定
+    window.addEventListener("DOMContentLoaded", () => {
+      const guessBtn = document.getElementById("guessButton");
+      const resetBtn = document.getElementById("resetButton");
+      const input = document.getElementById("guessInput");
+      const showAnswerHint = document.getElementById("showAnswerHint");
+
+      guessBtn.addEventListener("click", handleGuess);
+      resetBtn.addEventListener("click", resetGame);
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          handleGuess();
+        }
+      });
+
+      showAnswerHint.addEventListener("click", () => {
+        if (!secretNumber) return;
+        const msg = document.getElementById("message");
+        msg.textContent = `答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`;
+        msg.className = "message ok";
+        gameOver = true;
+        input.disabled = true;
+        document.getElementById("guessButton").disabled = true;
+      });
+
+      resetGame();
+    });
+  </script>
+</body>
+</html>
