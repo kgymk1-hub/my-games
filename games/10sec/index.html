@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>10秒チャレンジ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #e9eef8;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .container {
+      background: #fff;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 300px;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 1.2rem;
+    }
+    .time {
+      font-size: 2rem;
+      margin: 16px 0;
+      min-height: 2.2rem;
+      color: #333;
+    }
+    button {
+      width: 100%;
+      padding: 12px 0;
+      font-size: 1rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: 0.1s;
+      color: white;
+      background: #4b6fff;
+      touch-action: manipulation; /* タップ時の余計な遅延を減らすヒント */
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    .result {
+      margin-top: 12px;
+      font-size: 1rem;
+      min-height: 1.2rem;
+    }
+    .hiscore {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #444;
+      background: #f4f7ff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: left;
+      line-height: 1.35;
+    }
+    .hiscore b { color: #2a46c6; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>10秒チャレンジ</h1>
+
+  <div id="time" class="time">　</div>
+
+  <button id="mainBtn">スタート</button>
+
+  <div id="result" class="result"></div>
+
+  <div id="hiscore" class="hiscore"></div>
+  <button id="resetBtn" style="background:#8892a6;">ハイスコアをリセット</button>
+</div>
+
+<script>
+  let startTime = null;
+  let isRunning = false;
+
+  const timeDisplay = document.getElementById('time');
+  const resultDisplay = document.getElementById('result');
+  const mainBtn = document.getElementById('mainBtn');
+  const hiscoreDisplay = document.getElementById('hiscore');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // ---- ハイスコア（最小誤差）保存キー ----
+  const HS_KEY = "tenSecChallenge_highscore_v1";
+
+  function loadHighScore() {
+    try {
+      const raw = localStorage.getItem(HS_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (typeof obj?.bestDiff !== "number" || typeof obj?.bestElapsed !== "number") return null;
+      if (typeof obj?.updatedAt !== "number") obj.updatedAt = Date.now();
+      return obj;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveHighScore(hs) {
+    localStorage.setItem(HS_KEY, JSON.stringify(hs));
+  }
+
+  function formatDate(ts) {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}/${m}/${day} ${hh}:${mm}`;
+  }
+
+  function renderHighScore(hs) {
+    if (!hs) {
+      hiscoreDisplay.innerHTML = `ハイスコア：<b>未登録</b><br>（誤差が一番小さい記録が保存されます）`;
+      return;
+    }
+    hiscoreDisplay.innerHTML =
+      `ハイスコア：誤差 <b>${hs.bestDiff.toFixed(3)} 秒</b><br>` +
+      `記録：${hs.bestElapsed.toFixed(3)} 秒<br>` +
+      `更新：${formatDate(hs.updatedAt)}`;
+  }
+
+  // 初期表示
+  let highScore = loadHighScore();
+  renderHighScore(highScore);
+
+  function isNewRecord(diff, elapsed, hs) {
+    if (!hs) return true;
+    // diff が小さいほど良い。完全同点なら、elapsedが10に近いのは同じなので
+    // ここでは「より早い更新（elapsedが小さい方）」を優先（好みで変えてOK）
+    if (diff < hs.bestDiff - 1e-9) return true;
+    if (Math.abs(diff - hs.bestDiff) <= 1e-9 && elapsed < hs.bestElapsed - 1e-9) return true;
+    return false;
+  }
+
+  function handlePress(event) {
+    // 長押しなどで複数イベントが入らないよう一応制御
+    if (event.pointerType === 'mouse' || event.pointerType === 'touch' || event.pointerType === 'pen') {
+      event.preventDefault();
+    }
+
+    // --- 計測開始 ---
+    if (!isRunning) {
+      startTime = performance.now();
+      isRunning = true;
+
+      resultDisplay.textContent = "";
+      timeDisplay.textContent = "計測中…";
+
+      mainBtn.textContent = "ストップ";
+      mainBtn.style.background = "#ff6b6b";
+      return;
+    }
+
+    // --- 計測停止 ---
+    const end = performance.now();
+    isRunning = false;
+
+    const elapsed = (end - startTime) / 1000;
+    const diff = Math.abs(elapsed - 10);
+
+    timeDisplay.textContent = elapsed.toFixed(3) + " 秒";
+    resultDisplay.textContent = `誤差：${diff.toFixed(3)} 秒`;
+
+    // --- ハイスコア判定 ---
+    if (isNewRecord(diff, elapsed, highScore)) {
+      highScore = {
+        bestDiff: diff,
+        bestElapsed: elapsed,
+        updatedAt: Date.now()
+      };
+      saveHighScore(highScore);
+      renderHighScore(highScore);
+      resultDisplay.textContent += "（🎉 新記録）";
+    }
+
+    mainBtn.textContent = "スタート";
+    mainBtn.style.background = "#4b6fff";
+  }
+
+  // クリックではなく pointerdown を利用してラグを減らす
+  mainBtn.addEventListener('pointerdown', handlePress);
+
+  // ハイスコアリセット
+  resetBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    localStorage.removeItem(HS_KEY);
+    highScore = null;
+    renderHighScore(highScore);
+    resultDisplay.textContent = "ハイスコアをリセットしました";
+  });
+</script>
+
+</body>
+    </html>
