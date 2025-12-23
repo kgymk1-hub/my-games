@@ -97,12 +97,11 @@
       <h1>ブラウザゲーム集</h1>
       <p class="note">
         ここからゲームを選んで遊べます。<br>
-        ※ハイスコアは各自の端末・ブラウザにローカル保存（localStorage）されます。
+        ※ハイスコアはゲームごとに端末・ブラウザへローカル保存されます（未実装のゲームもあります）。
       </p>
     </header>
 
     <main class="grid" id="gameList"></main>
-
   </div>
 
   <script>
@@ -113,43 +112,65 @@
         desc: "体感10秒を狙うシンプルゲーム。誤差が小さいほど高スコア。",
         path: "games/10sec/index.html",
         tag: "#10秒 #短時間 #タイミング"
-      }
+      },
       {
         title: "さめがめ",
         desc: "同じ色のブロックがくっついた塊を選んで消す。まとめて消すと高得点。",
         path: "games/samegame/index.html",
-        tag: "#落ち物パズル #消去系"
+        tag: "#消去パズル #同色連結 #スコアアタック"
       },
       // 例：ゲームを増やすときはこの形で1件追加
       // {
       //   title: "連打ゲーム",
       //   desc: "10秒間で何回クリックできる？",
       //   path: "games/clicker/index.html",
-      //   tag: "連打"
+      //   tag: "#連打 #短時間"
       // },
     ];
     // ▲▲▲ ここだけ ▲▲▲
 
     const list = document.getElementById("gameList");
+
     games.forEach(g => {
       const card = document.createElement("section");
       card.className = "card";
-      card.innerHTML = `
-        <p class="title">${escapeHtml(g.title)}</p>
-        <p class="desc">${escapeHtml(g.desc)}</p>
-        <div class="row">
-          <span class="tag">${escapeHtml(g.tag || "")}</span>
-          <a class="btn" href="${g.path}">あそぶ</a>
-        </div>
-      `;
+
+      const title = document.createElement("p");
+      title.className = "title";
+      title.textContent = g.title ?? "";
+
+      const desc = document.createElement("p");
+      desc.className = "desc";
+      desc.textContent = g.desc ?? "";
+
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = g.tag || "";
+
+      const a = document.createElement("a");
+      a.className = "btn";
+      a.textContent = "あそぶ";
+
+      // hrefは innerHTML 埋め込みを避け、属性として安全にセット
+      // ついでに「空/不正」対策：pathが無ければボタン無効化
+      if (typeof g.path === "string" && g.path.trim() !== "") {
+        a.href = g.path;
+        a.setAttribute("aria-label", `${g.title}で遊ぶ`);
+      } else {
+        a.href = "#";
+        a.setAttribute("aria-disabled", "true");
+        a.style.opacity = "0.5";
+        a.style.pointerEvents = "none";
+        a.title = "リンク先が未設定です";
+      }
+
+      row.append(tag, a);
+      card.append(title, desc, row);
       list.appendChild(card);
     });
-
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"']/g, ch => ({
-        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-      }[ch]));
-    }
   </script>
 </body>
 </html>
