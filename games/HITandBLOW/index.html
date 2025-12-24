@@ -9,8 +9,6 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    * { box-sizing: border-box; }
-
     body {
       margin: 0;
       min-height: 100vh;
@@ -18,22 +16,30 @@
       justify-content: center;
       align-items: center;
       background: radial-gradient(circle at top, #eef3ff, #cfd8e3);
-      padding: 16px 0;
     }
 
+    /* 画面内に収めるため、コンテナを縦方向レイアウトにして高さも確保 */
     .game-container {
       background: rgba(255, 255, 255, 0.9);
       backdrop-filter: blur(10px);
       border-radius: 16px;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-      padding: 24px 20px;
-      max-width: 480px;
+      padding: 18px 16px;
+      max-width: 520px;
       width: 92%;
+      box-sizing: border-box;
+
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      /* スマホで履歴が見切れないよう、画面高に収める */
+      height: min(92vh, 820px);
     }
 
     h1 {
-      font-size: 1.4rem;
-      margin: 0 0 8px;
+      font-size: 1.35rem;
+      margin: 0;
       text-align: center;
     }
 
@@ -41,14 +47,7 @@
       font-size: 0.85rem;
       color: #555;
       text-align: center;
-      margin-bottom: 16px;
-    }
-
-    /* セクションを並べ替えられるようにラッパー化 */
-    .sections {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      margin: 0;
     }
 
     .rules {
@@ -56,33 +55,34 @@
       color: #444;
       background: #f5f7fb;
       border-radius: 10px;
-      padding: 8px 10px;
+      padding: 10px 12px;
       line-height: 1.6;
     }
 
     .rules ul {
       padding-left: 1.2em;
-      margin: 4px 0 0;
+      margin: 6px 0 0;
     }
 
+    /* 入力エリア：スマホでボタンがはみ出さないよう折り返し対応 */
     .input-area {
       display: flex;
       gap: 8px;
-      margin-bottom: 10px;
-      flex-wrap: wrap;          /* ★狭い幅で折り返す */
-      align-items: stretch;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
     .input-area input[type="text"] {
-      flex: 1 1 220px;          /* ★縮む/伸びる */
-      min-width: 0;             /* ★これが重要：はみ出し防止 */
-      padding: 8px 10px;
+      flex: 1 1 160px;
+      min-width: 140px;
+      padding: 10px 10px;
       font-size: 1.1rem;
       text-align: center;
       border-radius: 8px;
       border: 1px solid #c4c9d6;
       outline: none;
       transition: box-shadow 0.15s, border-color 0.15s;
+      box-sizing: border-box;
     }
 
     .input-area input[type="text"]:focus {
@@ -93,11 +93,12 @@
     button {
       border: none;
       border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 0.9rem;
+      padding: 10px 12px;
+      font-size: 0.95rem;
       cursor: pointer;
       white-space: nowrap;
       transition: transform 0.05s ease, box-shadow 0.05s ease, opacity 0.15s;
+      box-sizing: border-box;
     }
 
     button:active:not(:disabled) {
@@ -109,12 +110,17 @@
       background: #4b6fff;
       color: #fff;
       box-shadow: 0 4px 10px rgba(75, 111, 255, 0.45);
-      flex: 0 0 auto;           /* ★押し出されにくい */
+      flex: 0 0 auto;
     }
 
     .secondary-btn {
       background: #e4e7f2;
       color: #333;
+    }
+
+    .danger-btn {
+      background: #ffe4e4;
+      color: #7a1f1f;
     }
 
     button:disabled {
@@ -127,74 +133,137 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-      gap: 6px;
-      flex-wrap: wrap;          /* ★狭い幅で折り返す */
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .status {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       color: #555;
     }
 
     .message {
-      font-size: 0.9rem;
-      margin-bottom: 10px;
+      font-size: 0.95rem;
+      margin: 0;
       min-height: 1.2em;
     }
 
     .message.ok { color: #0c8a3e; }
     .message.error { color: #c0392b; }
 
+    /* 履歴：コンテナ内で伸び縮みして、必ず見えるようにする */
     .log {
       border-top: 1px solid #dde1ee;
       padding-top: 8px;
-      max-height: min(260px, 35vh);  /* ★スマホでも「画面内」に収めやすい */
-      overflow-y: auto;
-      font-size: 0.85rem;
-    }
-
-    .log-header,
-    .log-row {
-      display: grid;
-      grid-template-columns: 1fr 2fr 1.3fr 1.3fr;
-      gap: 4px;
-      align-items: center;
-      padding: 3px 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 160px;
+      flex: 1 1 auto;         /* ここが伸びる領域 */
+      overflow: hidden;       /* 内側のスクロールに任せる */
     }
 
     .log-header {
+      display: grid;
+      grid-template-columns: 0.7fr 2fr 1.1fr 1.1fr;
+      gap: 6px;
+      align-items: center;
+      padding: 4px 2px;
       font-weight: 600;
       border-bottom: 1px solid #dde1ee;
-      margin-bottom: 2px;
-      position: sticky;         /* ★スクロールしても見出しが残る */
-      top: 0;
-      background: rgba(255,255,255,0.95);
-      backdrop-filter: blur(6px);
+      flex: 0 0 auto;
+      font-size: 0.9rem;
+    }
+
+    .log-body {
+      overflow-y: auto;
       padding-top: 6px;
+      flex: 1 1 auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .log-row {
+      display: grid;
+      grid-template-columns: 0.7fr 2fr 1.1fr 1.1fr;
+      gap: 6px;
+      align-items: center;
+      padding: 6px 6px;
+      font-size: 0.9rem;
+      border-radius: 8px;
     }
 
     .log-row:nth-child(even) {
       background: #f7f8fc;
-      border-radius: 6px;
-      padding-inline: 4px;
+    }
+
+    /* 記録パネル */
+    .stats {
+      border-top: 1px solid #dde1ee;
+      padding-top: 10px;
+    }
+
+    .stats-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .stats-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #333;
+    }
+
+    .stats-summary {
+      font-size: 0.85rem;
+      color: #555;
+      margin: 0;
+    }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    .stats-table th, .stats-table td {
+      padding: 8px 8px;
+      border-bottom: 1px solid #e3e6f2;
+      text-align: left;
+    }
+
+    .stats-table th {
+      background: #f5f7fb;
+      font-weight: 600;
+      color: #444;
+    }
+
+    .stats-table tr:last-child td {
+      border-bottom: none;
     }
 
     .answer-hint {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       color: #777;
       text-align: right;
-      margin-top: 4px;
       cursor: pointer;
       user-select: none;
+      margin: 0;
     }
 
-    .answer-hint span { text-decoration: underline; }
+    .answer-hint span {
+      text-decoration: underline;
+    }
 
-    /* ★スマホ最適化：判定ボタンを100%幅にして“絶対にはみ出さない” */
-    @media (max-width: 420px) {
-      .game-container { padding: 20px 16px; }
+    @media (max-width: 380px) {
+      .game-container { padding: 16px 12px; }
+      button { width: 100%; }
       .primary-btn { width: 100%; }
+      .input-area input[type="text"] { flex: 1 1 100%; }
     }
   </style>
 </head>
@@ -203,64 +272,74 @@
     <h1>4桁ヒット＆ブロー</h1>
     <p class="subtitle">隠された4桁の数字を推理で当ててください</p>
 
-    <!-- ★入力→履歴→ルール の順で並ぶよう、sections内に配置 -->
-    <div class="sections">
-
-      <!-- 入力＆操作（上） -->
-      <div>
-        <div class="input-area">
-          <input
-            id="guessInput"
-            type="text"
-            maxlength="4"
-            autocomplete="off"
-            inputmode="numeric"
-            placeholder="例）1234"
-            aria-label="4桁の予想数字"
-          />
-          <button id="guessButton" class="primary-btn">判定</button>
-        </div>
-
-        <div class="controls">
-          <div class="status">
-            試行回数：<span id="attemptCount">0</span> 回
-          </div>
-          <div>
-            <button id="resetButton" class="secondary-btn">リセット</button>
-          </div>
-        </div>
-
-        <div id="message" class="message"></div>
-      </div>
-
-      <!-- 履歴（真ん中） -->
-      <div class="log" aria-label="判定履歴">
-        <div class="log-header">
-          <div>#</div>
-          <div>予想</div>
-          <div>ヒット</div>
-          <div>ブロー</div>
-        </div>
-        <div id="logBody"></div>
-      </div>
-
-      <div class="answer-hint" id="showAnswerHint">
-        （どうしても分からないときは <span>答えを見る</span>）
-      </div>
-
-      <!-- ルール（下） -->
-      <div class="rules">
-        <strong>ルール</strong>
-        <ul>
-          <li>相手の「4桁の数字」を当てるゲームです。</li>
-          <li>同じ数字は1回だけ使われます（重複なし）。</li>
-          <li>先頭は0ではありません（1000〜9999）。</li>
-          <li>位置も数字も一致：<strong>ヒット</strong></li>
-          <li>数字は合っているが位置が違う：<strong>ブロー</strong></li>
-        </ul>
-      </div>
-
+    <!-- 入力を最上段へ -->
+    <div class="input-area">
+      <input
+        id="guessInput"
+        type="text"
+        maxlength="4"
+        autocomplete="off"
+        inputmode="numeric"
+        placeholder="例）1234"
+      />
+      <button id="guessButton" class="primary-btn">判定</button>
     </div>
+
+    <div class="controls">
+      <div class="status">
+        試行回数：<span id="attemptCount">0</span> 回
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="resetButton" class="secondary-btn">リセット</button>
+      </div>
+    </div>
+
+    <p id="message" class="message"></p>
+
+    <!-- 履歴（画面内に収まるように伸縮＋スクロール） -->
+    <div class="log">
+      <div class="log-header">
+        <div>#</div>
+        <div>予想</div>
+        <div>ヒット</div>
+        <div>ブロー</div>
+      </div>
+      <div id="logBody" class="log-body"></div>
+    </div>
+
+    <!-- 記録（ハイスコア風） -->
+    <div class="stats">
+      <div class="stats-header">
+        <div class="stats-title">記録（クリア回数の分布）</div>
+        <button id="clearStatsButton" class="danger-btn">記録を消去</button>
+      </div>
+      <p id="statsSummary" class="stats-summary"></p>
+      <table class="stats-table" aria-label="stats">
+        <thead>
+          <tr>
+            <th>クリア回数</th>
+            <th>回数</th>
+          </tr>
+        </thead>
+        <tbody id="statsBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ルールは下へ -->
+    <div class="rules">
+      <strong>ルール</strong>
+      <ul>
+        <li>相手の「4桁の数字」を当てるゲームです。</li>
+        <li>同じ数字は1回だけ使われます（重複なし）。</li>
+        <li>先頭は0ではありません（1000〜9999）。</li>
+        <li>位置も数字も一致：<strong>ヒット</strong></li>
+        <li>数字は合っているが位置が違う：<strong>ブロー</strong></li>
+      </ul>
+    </div>
+
+    <p class="answer-hint" id="showAnswerHint">
+      （どうしても分からないときは <span>答えを見る</span>）
+    </p>
   </div>
 
   <script>
@@ -268,14 +347,103 @@
     let attempts = 0;
     let gameOver = false;
 
+    // ===== 記録（ローカル保存）=====
+    const STATS_KEY = "hitblow_stats_v1"; // バージョン付き
+    function loadStats() {
+      try {
+        const raw = localStorage.getItem(STATS_KEY);
+        const obj = raw ? JSON.parse(raw) : {};
+        return (obj && typeof obj === "object") ? obj : {};
+      } catch {
+        return {};
+      }
+    }
+    function saveStats(stats) {
+      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    }
+    function recordClear(attemptCount) {
+      const stats = loadStats();
+      const key = String(attemptCount);
+      stats[key] = (Number(stats[key]) || 0) + 1;
+      saveStats(stats);
+      renderStats();
+    }
+    function clearStats() {
+      localStorage.removeItem(STATS_KEY);
+      renderStats();
+    }
+
+    function computeStatsSummary(stats) {
+      let totalGames = 0;
+      let sumAttempts = 0;
+      let best = null;
+
+      for (const [k, v] of Object.entries(stats)) {
+        const a = Number(k);
+        const c = Number(v);
+        if (!Number.isFinite(a) || !Number.isFinite(c)) continue;
+        totalGames += c;
+        sumAttempts += a * c;
+        if (best === null || a < best) best = a;
+      }
+
+      const avg = totalGames > 0 ? (sumAttempts / totalGames) : null;
+      return { totalGames, best, avg };
+    }
+
+    function renderStats() {
+      const stats = loadStats();
+      const tbody = document.getElementById("statsBody");
+      const summaryEl = document.getElementById("statsSummary");
+      tbody.innerHTML = "";
+
+      // 表示のためにキー（試行回数）昇順で並べる
+      const rows = Object.keys(stats)
+        .map(k => Number(k))
+        .filter(n => Number.isFinite(n) && n > 0)
+        .sort((a, b) => a - b);
+
+      if (rows.length === 0) {
+        const tr = document.createElement("tr");
+        const td1 = document.createElement("td");
+        const td2 = document.createElement("td");
+        td1.textContent = "—";
+        td2.textContent = "まだ記録がありません";
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        tbody.appendChild(tr);
+        summaryEl.textContent = "総クリア回数：0回 / ベスト：— / 平均：—";
+        return;
+      }
+
+      for (const attempt of rows) {
+        const tr = document.createElement("tr");
+        const td1 = document.createElement("td");
+        const td2 = document.createElement("td");
+        td1.textContent = `${attempt}回`;
+        td2.textContent = `${stats[String(attempt)]}回`;
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        tbody.appendChild(tr);
+      }
+
+      const { totalGames, best, avg } = computeStatsSummary(stats);
+      const avgText = (avg === null) ? "—" : avg.toFixed(2) + "回";
+      const bestText = (best === null) ? "—" : best + "回";
+      summaryEl.textContent = `総クリア回数：${totalGames}回 / ベスト：${bestText} / 平均：${avgText}`;
+    }
+
+    // ===== ゲーム本体 =====
     function generateSecret() {
       const digits = ["0","1","2","3","4","5","6","7","8","9"];
       let secret = "";
 
+      // 1桁目：1〜9
       const firstIndex = Math.floor(Math.random() * 9) + 1; // 1〜9
       secret += digits[firstIndex];
       digits.splice(firstIndex, 1);
 
+      // 残り3桁
       for (let i = 0; i < 3; i++) {
         const idx = Math.floor(Math.random() * digits.length);
         secret += digits[idx];
@@ -293,7 +461,6 @@
       const input = document.getElementById("guessInput");
       input.value = "";
       input.disabled = false;
-
       document.getElementById("guessButton").disabled = false;
 
       const msg = document.getElementById("message");
@@ -301,9 +468,9 @@
       msg.className = "message";
 
       document.getElementById("logBody").innerHTML = "";
-      input.focus();
 
       // console.log("Secret:", secretNumber);
+      input.focus();
     }
 
     function validateGuess(guess) {
@@ -343,8 +510,19 @@
       const blowCell = document.createElement("div");
       blowCell.textContent = blows;
 
-      row.append(idxCell, guessCell, hitCell, blowCell);
+      row.appendChild(idxCell);
+      row.appendChild(guessCell);
+      row.appendChild(hitCell);
+      row.appendChild(blowCell);
+
       logBody.prepend(row);
+    }
+
+    function endGameUI() {
+      gameOver = true;
+      const input = document.getElementById("guessInput");
+      input.disabled = true;
+      document.getElementById("guessButton").disabled = true;
     }
 
     function handleGuess() {
@@ -371,9 +549,10 @@
       if (result.hits === 4) {
         messageEl.textContent = `正解！ ${attempts}回目で当てました。`;
         messageEl.className = "message ok";
-        gameOver = true;
-        input.disabled = true;
-        document.getElementById("guessButton").disabled = true;
+        endGameUI();
+
+        // ★クリア記録を保存
+        recordClear(attempts);
       } else {
         messageEl.textContent = `ヒント：ヒット ${result.hits}、ブロー ${result.blows}`;
         messageEl.className = "message";
@@ -388,6 +567,7 @@
       const resetBtn = document.getElementById("resetButton");
       const input = document.getElementById("guessInput");
       const showAnswerHint = document.getElementById("showAnswerHint");
+      const clearStatsBtn = document.getElementById("clearStatsButton");
 
       guessBtn.addEventListener("click", handleGuess);
       resetBtn.addEventListener("click", resetGame);
@@ -401,13 +581,17 @@
         const msg = document.getElementById("message");
         msg.textContent = `答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`;
         msg.className = "message ok";
-        gameOver = true;
-        input.disabled = true;
-        document.getElementById("guessButton").disabled = true;
+        endGameUI();
       });
 
+      clearStatsBtn.addEventListener("click", () => {
+        // 誤操作が不安なら confirm を入れてもOK
+        clearStats();
+      });
+
+      renderStats();
       resetGame();
     });
   </script>
 </body>
-        </html>
+</html>
