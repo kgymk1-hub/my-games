@@ -9,16 +9,16 @@
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    * { box-sizing: border-box; }
-
+    /* ★中央固定をやめて、上から自然に縦スクロールできるように */
     body {
       margin: 0;
       min-height: 100vh;
       display: flex;
       justify-content: center;
-      align-items: center;
-      padding: 14px;
+      align-items: flex-start;
+      padding: 14px 10px 24px;
       background: radial-gradient(circle at top, #eef3ff, #cfd8e3);
+      box-sizing: border-box;
     }
 
     .game-container {
@@ -28,77 +28,65 @@
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
       padding: 18px 16px;
       max-width: 520px;
-      width: min(520px, 100%);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      width: 92%;
+      box-sizing: border-box;
     }
 
     h1 {
-      font-size: 1.25rem;
-      margin: 0;
+      font-size: 1.55rem;
+      margin: 0 0 12px;
       text-align: center;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.02em;
     }
 
-    /* --- Input row --- */
-    .top-row {
-      display: flex;
+    /* 入力1行レイアウト（左：回数、中央：入力、右：判定） */
+    .input-row {
+      display: grid;
+      grid-template-columns: 82px 1fr 84px;
       gap: 10px;
       align-items: center;
-      flex-wrap: nowrap;
-      width: 100%;
+      margin-bottom: 10px;
     }
 
     .attempt-badge {
-      flex: 0 0 auto;
-      font-size: 0.9rem;
-      color: #333;
-      background: #eef2ff;
-      border: 1px solid #dde3ff;
-      padding: 8px 10px;
-      border-radius: 10px;
-      min-width: 72px;
       text-align: center;
+      background: #eef1ff;
+      border: 1px solid #d7ddff;
+      color: #1f2a55;
+      border-radius: 12px;
+      padding: 12px 6px;
+      font-weight: 600;
+      user-select: none;
       white-space: nowrap;
     }
 
-    .input-area {
-      flex: 1 1 auto;
-      display: flex;
-      gap: 8px;
-      min-width: 0; /* はみ出し対策 */
-      align-items: stretch;
-    }
-
-    .input-area input[type="text"] {
-      flex: 1 1 auto;
-      min-width: 0;
-      padding: 10px 10px;
-      font-size: 1.1rem;
+    .input-row input[type="text"] {
+      width: 100%;
+      padding: 12px 10px;
+      font-size: 1.25rem;
       text-align: center;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid #c4c9d6;
       outline: none;
       transition: box-shadow 0.15s, border-color 0.15s;
+      box-sizing: border-box;
       background: #fff;
     }
 
-    .input-area input[type="text"]:focus {
+    .input-row input[type="text"]:focus {
       border-color: #4b6fff;
-      box-shadow: 0 0 0 2px rgba(75, 111, 255, 0.2);
+      box-shadow: 0 0 0 3px rgba(75, 111, 255, 0.18);
     }
 
     button {
       border: none;
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 0.92rem;
+      border-radius: 12px;
+      padding: 12px 10px;
+      font-size: 0.95rem;
       cursor: pointer;
       white-space: nowrap;
       transition: transform 0.05s ease, box-shadow 0.05s ease, opacity 0.15s;
-      user-select: none;
-      touch-action: manipulation;
+      box-sizing: border-box;
     }
 
     button:active:not(:disabled) {
@@ -109,10 +97,7 @@
     .primary-btn {
       background: #4b6fff;
       color: #fff;
-      box-shadow: 0 4px 10px rgba(75, 111, 255, 0.35);
-      flex: 0 0 auto;
-      padding-inline: 12px;
-      min-width: 76px; /* 判定ボタンを小さめ固定 */
+      box-shadow: 0 4px 10px rgba(75, 111, 255, 0.45);
     }
 
     .secondary-btn {
@@ -121,8 +106,8 @@
     }
 
     .danger-btn {
-      background: #ffe3e3;
-      color: #7a1f1f;
+      background: #ffe8e8;
+      color: #8a1f1f;
       border: 1px solid #ffd0d0;
     }
 
@@ -132,147 +117,126 @@
       box-shadow: none;
     }
 
+    /* ★「ヒント」欄は廃止：メッセージはエラー/正解のみ表示 */
     .message {
       font-size: 0.95rem;
-      min-height: 1.3em;
-      margin: 0;
+      margin: 6px 2px 8px;
+      min-height: 1.1em;
     }
-    .message.ok { color: #0c8a3e; }
-    .message.error { color: #c0392b; }
+    .message.ok { color: #0c8a3e; font-weight: 600; }
+    .message.error { color: #c0392b; font-weight: 600; }
 
-    /* --- Log (always visible via scroll) --- */
+    /* ログ：スクロールさせずに全履歴を表示（ページ全体でスクロール） */
     .log {
       border-top: 1px solid #dde1ee;
       padding-top: 8px;
-      overflow: auto;
-      border-radius: 12px;
-      background: rgba(247, 248, 252, 0.55);
-      padding: 10px 10px 8px;
-      max-height: 34vh; /* スマホでも画面から消えにくい */
-    }
-
-    .log-title {
+      margin-top: 6px;
       font-size: 0.9rem;
-      color: #333;
-      margin: 0 0 8px;
-      font-weight: 650;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
     }
 
     .log-header,
     .log-row {
       display: grid;
-      grid-template-columns: 0.7fr 2fr 1fr 1fr;
+      grid-template-columns: 46px 1fr 72px 72px;
       gap: 6px;
       align-items: center;
-      padding: 6px 6px;
-      border-radius: 10px;
+      padding: 5px 4px;
+      border-radius: 8px;
+      box-sizing: border-box;
     }
 
     .log-header {
       font-weight: 700;
       border: 1px solid #dde1ee;
-      background: #ffffffcc;
-      position: sticky;
-      top: 0;
-      backdrop-filter: blur(6px);
-      z-index: 1;
+      background: #f7f8fc;
+      margin-bottom: 6px;
+    }
+
+    /* ★行間と余白を詰める */
+    .log-row {
+      padding: 4px 4px;
     }
 
     .log-row:nth-child(even) {
-      background: #ffffffaa;
+      background: #f7f8fc;
     }
 
-    .log-empty {
-      color: #666;
-      font-size: 0.9rem;
-      padding: 10px 6px 2px;
+    .divider {
+      height: 10px;
     }
 
-    /* Reset button under log */
-    .below-log {
+    /* リセット：履歴の下 */
+    .reset-area {
+      margin-top: 10px;
       display: flex;
       justify-content: flex-end;
       gap: 8px;
-      flex-wrap: wrap;
     }
 
-    /* --- Records section --- */
+    /* 記録（分布） */
     .records {
-      border: 1px solid #dde1ee;
-      border-radius: 14px;
-      padding: 12px 12px 10px;
-      background: #ffffffcc;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #dde1ee;
     }
 
-    .records-header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .records-header h2 {
-      font-size: 1rem;
-      margin: 0;
+    .records h2 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
     }
 
     .records-summary {
-      font-size: 0.86rem;
+      font-size: 0.9rem;
       color: #444;
-      line-height: 1.6;
+      margin: 6px 0 10px;
+      line-height: 1.5;
     }
 
     .records-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-      overflow: hidden;
+      border: 1px solid #dde1ee;
       border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
     }
 
-    .records-table th,
-    .records-table td {
+    .records-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
       padding: 8px 10px;
-      border-bottom: 1px solid #eef0f6;
-      text-align: left;
+      border-top: 1px solid #eef1fb;
+      font-size: 0.9rem;
     }
 
-    .records-table th {
-      background: #f5f7fb;
+    .records-row.header {
+      background: #f7f8fc;
       font-weight: 700;
-      color: #333;
+      border-top: none;
     }
 
-    .records-table tr:last-child td {
-      border-bottom: none;
+    .records-row.empty {
+      grid-template-columns: 1fr;
+      text-align: center;
+      color: #666;
     }
 
-    /* Clear records button: far & safe */
-    .danger-zone {
-      margin-top: 14px; /* 離す */
-      padding-top: 12px;
-      border-top: 1px dashed #e2e6f2;
+    /* ★誤タップ防止：危険ボタンは離れた場所（下の方）に */
+    .records-danger-area {
+      margin-top: 14px;
       display: flex;
-      justify-content: flex-end;
+      justify-content: center;
     }
 
-    /* --- Rules --- */
+    /* ルール */
     .rules {
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       color: #444;
       background: #f5f7fb;
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 10px 12px;
-      line-height: 1.6;
-      border: 1px solid #e7ebf7;
+      margin-top: 18px;
+      line-height: 1.65;
+      border: 1px solid #e5e9f6;
     }
 
     .rules ul {
@@ -283,22 +247,33 @@
     .answer-hint {
       font-size: 0.78rem;
       color: #777;
-      text-align: center;
+      text-align: right;
+      margin-top: 8px;
       cursor: pointer;
       user-select: none;
-      padding: 6px 0 2px;
     }
 
     .answer-hint span { text-decoration: underline; }
 
-    /* Small screens: keep content from overlapping and keep log visible */
+    /* ★スマホはさらに詰める */
     @media (max-width: 420px) {
-      body { align-items: flex-start; }
-      .game-container { padding: 16px 14px; }
-      .attempt-badge { min-width: 66px; padding: 8px 8px; }
-      .primary-btn { min-width: 70px; padding-inline: 10px; }
-      .log { max-height: 32vh; }
-      .log-header, .log-row { grid-template-columns: 0.7fr 2fr 0.9fr 0.9fr; }
+      .game-container { padding: 16px 12px; width: 94%; }
+      h1 { font-size: 1.45rem; }
+      .input-row { grid-template-columns: 74px 1fr 76px; gap: 8px; }
+      .attempt-badge { padding: 10px 6px; border-radius: 12px; }
+      .input-row input[type="text"] { font-size: 1.15rem; padding: 11px 10px; }
+      button { padding: 11px 10px; border-radius: 12px; }
+
+      /* ★履歴の文字を小さく＆行を詰める */
+      .log { font-size: 0.82rem; }
+      .log-header, .log-row {
+        grid-template-columns: 40px 1fr 58px 58px;
+        gap: 6px;
+        padding: 4px 3px;
+      }
+      .log-row { padding: 3px 3px; }
+
+      .rules { font-size: 0.82rem; }
     }
   </style>
 </head>
@@ -306,34 +281,26 @@
   <div class="game-container">
     <h1>HITandBLOW</h1>
 
-    <!-- Input area (top) -->
-    <div class="top-row">
-      <div class="attempt-badge">
-        <span id="attemptCount">1</span>回目
-      </div>
+    <div class="input-row">
+      <div class="attempt-badge"><span id="attemptCount">1</span>回目</div>
 
-      <div class="input-area">
-        <input
-          id="guessInput"
-          type="text"
-          inputmode="numeric"
-          maxlength="4"
-          autocomplete="off"
-          placeholder="例）1234"
-        />
-        <button id="guessButton" class="primary-btn">判定</button>
-      </div>
+      <input
+        id="guessInput"
+        type="text"
+        maxlength="4"
+        inputmode="numeric"
+        autocomplete="off"
+        placeholder="例）1234"
+      />
+
+      <button id="guessButton" class="primary-btn">判定</button>
     </div>
 
-    <p id="message" class="message"></p>
+    <!-- ★ヒント欄は廃止：エラー/正解だけ表示 -->
+    <div id="message" class="message"></div>
 
-    <!-- Log (below input) -->
-    <div class="log" aria-label="判定履歴">
-      <div class="log-title">
-        <span>予想結果履歴</span>
-        <span style="font-size:0.8rem;color:#666;">上に新しい履歴</span>
-      </div>
-
+    <!-- ★「予想結果履歴」「上に新しい履歴」は表示しない -->
+    <div class="log">
       <div class="log-header">
         <div>#</div>
         <div>予想</div>
@@ -341,45 +308,38 @@
         <div>ブロー</div>
       </div>
       <div id="logBody"></div>
-      <div id="logEmpty" class="log-empty">まだ履歴がありません</div>
     </div>
 
-    <!-- Reset button under log -->
-    <div class="below-log">
+    <!-- リセットは履歴の下 -->
+    <div class="reset-area">
       <button id="resetButton" class="secondary-btn">リセット</button>
     </div>
 
-    <!-- Records -->
-    <section class="records" aria-label="記録（クリア回数の分布）">
-      <div class="records-header">
-        <h2>記録（クリア回数の分布）</h2>
-      </div>
+    <!-- 記録（分布） -->
+    <div class="records">
+      <h2>記録（クリア回数の分布）</h2>
 
       <div class="records-summary" id="recordsSummary">
         総クリア回数：0回 / ベスト：- / 平均：-
       </div>
 
-      <table class="records-table" aria-label="記録テーブル">
-        <thead>
-          <tr>
-            <th>クリア回数</th>
-            <th>回数</th>
-          </tr>
-        </thead>
-        <tbody id="recordsBody">
-          <tr>
-            <td colspan="2" style="color:#666;">まだ記録がありません</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="records-table" id="recordsTable">
+        <div class="records-row header">
+          <div>クリア回数</div>
+          <div>回数</div>
+        </div>
+        <div class="records-row empty" id="recordsEmptyRow">
+          まだ記録がありません
+        </div>
+        <div id="recordsBody"></div>
+      </div>
 
-      <!-- Clear records button far away -->
-      <div class="danger-zone">
+      <!-- ★誤タップ防止：消去ボタンは離す（下の方・中央） -->
+      <div class="records-danger-area">
         <button id="clearRecordsButton" class="danger-btn">記録を消去</button>
       </div>
-    </section>
+    </div>
 
-    <!-- Rules (below records; no overlap) -->
     <div class="rules">
       <strong>ルール</strong>
       <ul>
@@ -389,101 +349,30 @@
         <li>位置も数字も一致：<strong>ヒット</strong></li>
         <li>数字は合っているが位置が違う：<strong>ブロー</strong></li>
       </ul>
-    </div>
 
-    <div class="answer-hint" id="showAnswerHint">
-      （どうしても分からないときは <span>答えを見る</span>）
+      <div class="answer-hint" id="showAnswerHint">
+        （どうしても分からないときは <span>答えを見る</span>）
+      </div>
     </div>
   </div>
 
   <script>
-    // ===== Game State =====
     let secretNumber = "";
     let attempts = 0;
     let gameOver = false;
 
-    // ===== Records (localStorage) =====
-    const RECORDS_KEY = "hitandblow_records_v1";
+    const STORAGE_KEY = "hitandblow_records_v1"; // クリア回数の分布
 
-    function loadRecords() {
-      try {
-        const raw = localStorage.getItem(RECORDS_KEY);
-        if (!raw) return {};
-        const obj = JSON.parse(raw);
-        if (obj && typeof obj === "object") return obj;
-      } catch (_) {}
-      return {};
-    }
-
-    function saveRecords(records) {
-      localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
-    }
-
-    function addRecord(clearAttempts) {
-      const records = loadRecords();
-      const key = String(clearAttempts);
-      records[key] = (records[key] || 0) + 1;
-      saveRecords(records);
-      renderRecords();
-    }
-
-    function calcStats(records) {
-      const entries = Object.entries(records)
-        .map(([k, v]) => ({ n: Number(k), c: Number(v) }))
-        .filter(x => Number.isFinite(x.n) && Number.isFinite(x.c) && x.c > 0)
-        .sort((a, b) => a.n - b.n);
-
-      const total = entries.reduce((s, x) => s + x.c, 0);
-      if (total === 0) return { total: 0, best: null, avg: null, entries: [] };
-
-      const best = entries[0].n;
-      const sum = entries.reduce((s, x) => s + x.n * x.c, 0);
-      const avg = sum / total;
-
-      return { total, best, avg, entries };
-    }
-
-    function renderRecords() {
-      const records = loadRecords();
-      const stats = calcStats(records);
-
-      const summaryEl = document.getElementById("recordsSummary");
-      const bodyEl = document.getElementById("recordsBody");
-
-      if (stats.total === 0) {
-        summaryEl.textContent = "総クリア回数：0回 / ベスト：- / 平均：-";
-        bodyEl.innerHTML = `
-          <tr>
-            <td colspan="2" style="color:#666;">まだ記録がありません</td>
-          </tr>
-        `;
-        return;
-      }
-
-      const avgText = stats.avg.toFixed(2);
-      summaryEl.textContent = `総クリア回数：${stats.total}回 / ベスト：${stats.best}回 / 平均：${avgText}回`;
-
-      bodyEl.innerHTML = stats.entries
-        .map(x => `<tr><td>${x.n}回</td><td>${x.c}回</td></tr>`)
-        .join("");
-    }
-
-    function clearRecords() {
-      localStorage.removeItem(RECORDS_KEY);
-      renderRecords();
-    }
-
-    // ===== Secret generator =====
     function generateSecret() {
       const digits = ["0","1","2","3","4","5","6","7","8","9"];
       let secret = "";
 
-      // 1st digit: 1-9
+      // 1桁目：1〜9（0から始まらない）
       const firstIndex = Math.floor(Math.random() * 9) + 1;
       secret += digits[firstIndex];
       digits.splice(firstIndex, 1);
 
-      // rest 3 digits: no duplicates
+      // 残り3桁：重複なし
       for (let i = 0; i < 3; i++) {
         const idx = Math.floor(Math.random() * digits.length);
         secret += digits[idx];
@@ -492,44 +381,108 @@
       return secret;
     }
 
-    // ===== UI helpers =====
-    function setAttemptBadge() {
-      // 0回開始だと「0回目」になるので、入力前は1回目表示にする
-      const badge = document.getElementById("attemptCount");
-      const display = Math.max(1, attempts + 1);
-      badge.textContent = String(display);
+    function loadRecords() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return {};
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === "object") return obj;
+        return {};
+      } catch {
+        return {};
+      }
     }
 
-    function setMessage(text, type) {
-      const el = document.getElementById("message");
-      el.textContent = text;
-      el.className = "message" + (type ? " " + type : "");
+    function saveRecords(records) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     }
 
-    function setLogEmptyVisible() {
-      const empty = document.getElementById("logEmpty");
-      const body = document.getElementById("logBody");
-      empty.style.display = body.children.length === 0 ? "block" : "none";
+    function calcStats(records) {
+      const keys = Object.keys(records);
+      if (keys.length === 0) {
+        return { total: 0, best: null, avg: null };
+      }
+      let total = 0;
+      let sum = 0;
+      let best = null;
+
+      for (const k of keys) {
+        const tries = Number(k);
+        const count = Number(records[k]) || 0;
+        total += count;
+        sum += tries * count;
+        if (best === null || tries < best) best = tries;
+      }
+      const avg = total > 0 ? (sum / total) : null;
+      return { total, best, avg };
     }
 
-    // ===== Game functions =====
+    function renderRecords() {
+      const records = loadRecords();
+      const body = document.getElementById("recordsBody");
+      const emptyRow = document.getElementById("recordsEmptyRow");
+      const summary = document.getElementById("recordsSummary");
+
+      body.innerHTML = "";
+
+      const keys = Object.keys(records)
+        .map(Number)
+        .filter(n => Number.isFinite(n))
+        .sort((a,b) => a - b);
+
+      if (keys.length === 0) {
+        emptyRow.style.display = "block";
+      } else {
+        emptyRow.style.display = "none";
+        for (const k of keys) {
+          const row = document.createElement("div");
+          row.className = "records-row";
+          const c1 = document.createElement("div");
+          c1.textContent = `${k}回`;
+          const c2 = document.createElement("div");
+          c2.textContent = `${records[String(k)]}回`;
+          row.appendChild(c1);
+          row.appendChild(c2);
+          body.appendChild(row);
+        }
+      }
+
+      const stats = calcStats(records);
+      const bestText = stats.best === null ? "-" : `${stats.best}回`;
+      const avgText = stats.avg === null ? "-" : `${stats.avg.toFixed(2)}回`;
+      summary.textContent = `総クリア回数：${stats.total}回 / ベスト：${bestText} / 平均：${avgText}`;
+    }
+
+    function addClearRecord(tries) {
+      const records = loadRecords();
+      const key = String(tries);
+      records[key] = (Number(records[key]) || 0) + 1;
+      saveRecords(records);
+      renderRecords();
+    }
+
     function resetGame() {
       secretNumber = generateSecret();
       attempts = 0;
       gameOver = false;
 
-      document.getElementById("guessInput").value = "";
-      document.getElementById("guessInput").disabled = false;
-      document.getElementById("guessButton").disabled = false;
+      // 0回目ではなく、入力前は1回目表示に
+      document.getElementById("attemptCount").textContent = "1";
+      const input = document.getElementById("guessInput");
+      input.value = "";
+      input.disabled = false;
+
+      const btn = document.getElementById("guessButton");
+      btn.disabled = false;
+
+      const msg = document.getElementById("message");
+      msg.textContent = "";
+      msg.className = "message";
 
       document.getElementById("logBody").innerHTML = "";
-      setLogEmptyVisible();
-
-      setAttemptBadge();
-      setMessage("", "");
 
       // console.log("Secret:", secretNumber);
-      document.getElementById("guessInput").focus();
+      input.focus();
     }
 
     function validateGuess(guess) {
@@ -557,61 +510,68 @@
       row.className = "log-row";
 
       const idxCell = document.createElement("div");
-      idxCell.textContent = String(attempts);
+      idxCell.textContent = attempts;
 
       const guessCell = document.createElement("div");
       guessCell.textContent = guess;
 
       const hitCell = document.createElement("div");
-      hitCell.textContent = String(hits);
+      hitCell.textContent = hits;
 
       const blowCell = document.createElement("div");
-      blowCell.textContent = String(blows);
+      blowCell.textContent = blows;
 
       row.appendChild(idxCell);
       row.appendChild(guessCell);
       row.appendChild(hitCell);
       row.appendChild(blowCell);
 
+      // 新しい履歴を上に（要望があれば append に変えて下積みにもできる）
       logBody.prepend(row);
-      setLogEmptyVisible();
     }
 
     function handleGuess() {
       if (gameOver) return;
 
       const input = document.getElementById("guessInput");
-      const rawGuess = input.value.trim();
+      const msg = document.getElementById("message");
 
+      const rawGuess = input.value.trim();
       const error = validateGuess(rawGuess);
+
       if (error) {
-        setMessage(error, "error");
+        msg.textContent = error;
+        msg.className = "message error";
         return;
       }
 
       attempts++;
-      setAttemptBadge();
+      // 次に打つ前提で「回目」を更新（例：いま6回目の入力をしたら、表示は7回目へ）
+      document.getElementById("attemptCount").textContent = String(attempts + 1);
 
       const result = judge(rawGuess, secretNumber);
       addLogRow(rawGuess, result.hits, result.blows);
 
       if (result.hits === 4) {
-        setMessage(`正解！ ${attempts}回で当てました。`, "ok");
+        msg.textContent = `正解！ ${attempts}回目で当てました。`;
+        msg.className = "message ok";
         gameOver = true;
+
         input.disabled = true;
         document.getElementById("guessButton").disabled = true;
 
-        // record
-        addRecord(attempts);
+        // クリア記録を加算
+        addClearRecord(attempts);
       } else {
-        setMessage(`ヒント：ヒット ${result.hits}、ブロー ${result.blows}`, "");
+        // ★ヒント欄は不要：通常時は何も出さない
+        msg.textContent = "";
+        msg.className = "message";
       }
 
       input.value = "";
       input.focus();
     }
 
-    // ===== Events =====
     window.addEventListener("DOMContentLoaded", () => {
       const guessBtn = document.getElementById("guessButton");
       const resetBtn = document.getElementById("resetButton");
@@ -628,7 +588,9 @@
 
       showAnswerHint.addEventListener("click", () => {
         if (!secretNumber) return;
-        setMessage(`答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`, "ok");
+        const msg = document.getElementById("message");
+        msg.textContent = `答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`;
+        msg.className = "message ok";
         gameOver = true;
         input.disabled = true;
         document.getElementById("guessButton").disabled = true;
@@ -637,8 +599,8 @@
       clearRecordsBtn.addEventListener("click", () => {
         const ok = confirm("記録を消去します。よろしいですか？");
         if (!ok) return;
-        clearRecords();
-        setMessage("記録を消去しました。", "ok");
+        localStorage.removeItem(STORAGE_KEY);
+        renderRecords();
       });
 
       renderRecords();
