@@ -2,12 +2,14 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>4桁ヒット＆ブローゲーム</title>
+  <title>HITandBLOW</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     :root {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -15,74 +17,71 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      padding: 14px;
       background: radial-gradient(circle at top, #eef3ff, #cfd8e3);
     }
 
-    /* 画面内に収めるため、コンテナを縦方向レイアウトにして高さも確保 */
     .game-container {
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(10px);
       border-radius: 16px;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
       padding: 18px 16px;
       max-width: 520px;
-      width: 92%;
-      box-sizing: border-box;
-
+      width: min(520px, 100%);
       display: flex;
       flex-direction: column;
       gap: 10px;
-
-      /* スマホで履歴が見切れないよう、画面高に収める */
-      height: min(92vh, 820px);
     }
 
     h1 {
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       margin: 0;
       text-align: center;
+      letter-spacing: 0.5px;
     }
 
-    .subtitle {
-      font-size: 0.85rem;
-      color: #555;
-      text-align: center;
-      margin: 0;
+    /* --- Input row --- */
+    .top-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: nowrap;
+      width: 100%;
     }
 
-    .rules {
-      font-size: 0.8rem;
-      color: #444;
-      background: #f5f7fb;
+    .attempt-badge {
+      flex: 0 0 auto;
+      font-size: 0.9rem;
+      color: #333;
+      background: #eef2ff;
+      border: 1px solid #dde3ff;
+      padding: 8px 10px;
       border-radius: 10px;
-      padding: 10px 12px;
-      line-height: 1.6;
+      min-width: 72px;
+      text-align: center;
+      white-space: nowrap;
     }
 
-    .rules ul {
-      padding-left: 1.2em;
-      margin: 6px 0 0;
-    }
-
-    /* 入力エリア：スマホでボタンがはみ出さないよう折り返し対応 */
     .input-area {
+      flex: 1 1 auto;
       display: flex;
       gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
+      min-width: 0; /* はみ出し対策 */
+      align-items: stretch;
     }
 
     .input-area input[type="text"] {
-      flex: 1 1 160px;
-      min-width: 140px;
+      flex: 1 1 auto;
+      min-width: 0;
       padding: 10px 10px;
       font-size: 1.1rem;
       text-align: center;
-      border-radius: 8px;
+      border-radius: 10px;
       border: 1px solid #c4c9d6;
       outline: none;
       transition: box-shadow 0.15s, border-color 0.15s;
-      box-sizing: border-box;
+      background: #fff;
     }
 
     .input-area input[type="text"]:focus {
@@ -92,13 +91,14 @@
 
     button {
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 10px 12px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       cursor: pointer;
       white-space: nowrap;
       transition: transform 0.05s ease, box-shadow 0.05s ease, opacity 0.15s;
-      box-sizing: border-box;
+      user-select: none;
+      touch-action: manipulation;
     }
 
     button:active:not(:disabled) {
@@ -109,8 +109,10 @@
     .primary-btn {
       background: #4b6fff;
       color: #fff;
-      box-shadow: 0 4px 10px rgba(75, 111, 255, 0.45);
+      box-shadow: 0 4px 10px rgba(75, 111, 255, 0.35);
       flex: 0 0 auto;
+      padding-inline: 12px;
+      min-width: 76px; /* 判定ボタンを小さめ固定 */
     }
 
     .secondary-btn {
@@ -119,8 +121,9 @@
     }
 
     .danger-btn {
-      background: #ffe4e4;
+      background: #ffe3e3;
       color: #7a1f1f;
+      border: 1px solid #ffd0d0;
     }
 
     button:disabled {
@@ -129,203 +132,254 @@
       box-shadow: none;
     }
 
-    .controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .status {
-      font-size: 0.85rem;
-      color: #555;
-    }
-
     .message {
       font-size: 0.95rem;
+      min-height: 1.3em;
       margin: 0;
-      min-height: 1.2em;
     }
-
     .message.ok { color: #0c8a3e; }
     .message.error { color: #c0392b; }
 
-    /* 履歴：コンテナ内で伸び縮みして、必ず見えるようにする */
+    /* --- Log (always visible via scroll) --- */
     .log {
       border-top: 1px solid #dde1ee;
       padding-top: 8px;
-      display: flex;
-      flex-direction: column;
-      min-height: 160px;
-      flex: 1 1 auto;         /* ここが伸びる領域 */
-      overflow: hidden;       /* 内側のスクロールに任せる */
+      overflow: auto;
+      border-radius: 12px;
+      background: rgba(247, 248, 252, 0.55);
+      padding: 10px 10px 8px;
+      max-height: 34vh; /* スマホでも画面から消えにくい */
     }
 
-    .log-header {
-      display: grid;
-      grid-template-columns: 0.7fr 2fr 1.1fr 1.1fr;
-      gap: 6px;
-      align-items: center;
-      padding: 4px 2px;
-      font-weight: 600;
-      border-bottom: 1px solid #dde1ee;
-      flex: 0 0 auto;
+    .log-title {
       font-size: 0.9rem;
+      color: #333;
+      margin: 0 0 8px;
+      font-weight: 650;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
     }
 
-    .log-body {
-      overflow-y: auto;
-      padding-top: 6px;
-      flex: 1 1 auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
+    .log-header,
     .log-row {
       display: grid;
-      grid-template-columns: 0.7fr 2fr 1.1fr 1.1fr;
+      grid-template-columns: 0.7fr 2fr 1fr 1fr;
       gap: 6px;
       align-items: center;
       padding: 6px 6px;
-      font-size: 0.9rem;
-      border-radius: 8px;
-    }
-
-    .log-row:nth-child(even) {
-      background: #f7f8fc;
-    }
-
-    /* 記録パネル */
-    .stats {
-      border-top: 1px solid #dde1ee;
-      padding-top: 10px;
-    }
-
-    .stats-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 6px;
-    }
-
-    .stats-title {
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: #333;
-    }
-
-    .stats-summary {
-      font-size: 0.85rem;
-      color: #555;
-      margin: 0;
-    }
-
-    .stats-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      overflow: hidden;
       border-radius: 10px;
     }
 
-    .stats-table th, .stats-table td {
-      padding: 8px 8px;
-      border-bottom: 1px solid #e3e6f2;
-      text-align: left;
+    .log-header {
+      font-weight: 700;
+      border: 1px solid #dde1ee;
+      background: #ffffffcc;
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(6px);
+      z-index: 1;
     }
 
-    .stats-table th {
-      background: #f5f7fb;
-      font-weight: 600;
-      color: #444;
+    .log-row:nth-child(even) {
+      background: #ffffffaa;
     }
 
-    .stats-table tr:last-child td {
-      border-bottom: none;
+    .log-empty {
+      color: #666;
+      font-size: 0.9rem;
+      padding: 10px 6px 2px;
     }
 
-    .answer-hint {
-      font-size: 0.8rem;
-      color: #777;
-      text-align: right;
-      cursor: pointer;
-      user-select: none;
+    /* Reset button under log */
+    .below-log {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* --- Records section --- */
+    .records {
+      border: 1px solid #dde1ee;
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+      background: #ffffffcc;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .records-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .records-header h2 {
+      font-size: 1rem;
       margin: 0;
     }
 
-    .answer-hint span {
-      text-decoration: underline;
+    .records-summary {
+      font-size: 0.86rem;
+      color: #444;
+      line-height: 1.6;
     }
 
-    @media (max-width: 380px) {
-      .game-container { padding: 16px 12px; }
-      button { width: 100%; }
-      .primary-btn { width: 100%; }
-      .input-area input[type="text"] { flex: 1 1 100%; }
+    .records-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    .records-table th,
+    .records-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #eef0f6;
+      text-align: left;
+    }
+
+    .records-table th {
+      background: #f5f7fb;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .records-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Clear records button: far & safe */
+    .danger-zone {
+      margin-top: 14px; /* 離す */
+      padding-top: 12px;
+      border-top: 1px dashed #e2e6f2;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    /* --- Rules --- */
+    .rules {
+      font-size: 0.82rem;
+      color: #444;
+      background: #f5f7fb;
+      border-radius: 14px;
+      padding: 10px 12px;
+      line-height: 1.6;
+      border: 1px solid #e7ebf7;
+    }
+
+    .rules ul {
+      padding-left: 1.2em;
+      margin: 6px 0 0;
+    }
+
+    .answer-hint {
+      font-size: 0.78rem;
+      color: #777;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      padding: 6px 0 2px;
+    }
+
+    .answer-hint span { text-decoration: underline; }
+
+    /* Small screens: keep content from overlapping and keep log visible */
+    @media (max-width: 420px) {
+      body { align-items: flex-start; }
+      .game-container { padding: 16px 14px; }
+      .attempt-badge { min-width: 66px; padding: 8px 8px; }
+      .primary-btn { min-width: 70px; padding-inline: 10px; }
+      .log { max-height: 32vh; }
+      .log-header, .log-row { grid-template-columns: 0.7fr 2fr 0.9fr 0.9fr; }
     }
   </style>
 </head>
 <body>
   <div class="game-container">
-    <h1>4桁ヒット＆ブロー</h1>
-    <p class="subtitle">隠された4桁の数字を推理で当ててください</p>
+    <h1>HITandBLOW</h1>
 
-    <!-- 入力を最上段へ -->
-    <div class="input-area">
-      <input
-        id="guessInput"
-        type="text"
-        maxlength="4"
-        autocomplete="off"
-        inputmode="numeric"
-        placeholder="例）1234"
-      />
-      <button id="guessButton" class="primary-btn">判定</button>
-    </div>
-
-    <div class="controls">
-      <div class="status">
-        試行回数：<span id="attemptCount">0</span> 回
+    <!-- Input area (top) -->
+    <div class="top-row">
+      <div class="attempt-badge">
+        <span id="attemptCount">1</span>回目
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button id="resetButton" class="secondary-btn">リセット</button>
+
+      <div class="input-area">
+        <input
+          id="guessInput"
+          type="text"
+          inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
+          placeholder="例）1234"
+        />
+        <button id="guessButton" class="primary-btn">判定</button>
       </div>
     </div>
 
     <p id="message" class="message"></p>
 
-    <!-- 履歴（画面内に収まるように伸縮＋スクロール） -->
-    <div class="log">
+    <!-- Log (below input) -->
+    <div class="log" aria-label="判定履歴">
+      <div class="log-title">
+        <span>予想結果履歴</span>
+        <span style="font-size:0.8rem;color:#666;">上に新しい履歴</span>
+      </div>
+
       <div class="log-header">
         <div>#</div>
         <div>予想</div>
         <div>ヒット</div>
         <div>ブロー</div>
       </div>
-      <div id="logBody" class="log-body"></div>
+      <div id="logBody"></div>
+      <div id="logEmpty" class="log-empty">まだ履歴がありません</div>
     </div>
 
-    <!-- 記録（ハイスコア風） -->
-    <div class="stats">
-      <div class="stats-header">
-        <div class="stats-title">記録（クリア回数の分布）</div>
-        <button id="clearStatsButton" class="danger-btn">記録を消去</button>
+    <!-- Reset button under log -->
+    <div class="below-log">
+      <button id="resetButton" class="secondary-btn">リセット</button>
+    </div>
+
+    <!-- Records -->
+    <section class="records" aria-label="記録（クリア回数の分布）">
+      <div class="records-header">
+        <h2>記録（クリア回数の分布）</h2>
       </div>
-      <p id="statsSummary" class="stats-summary"></p>
-      <table class="stats-table" aria-label="stats">
+
+      <div class="records-summary" id="recordsSummary">
+        総クリア回数：0回 / ベスト：- / 平均：-
+      </div>
+
+      <table class="records-table" aria-label="記録テーブル">
         <thead>
           <tr>
             <th>クリア回数</th>
             <th>回数</th>
           </tr>
         </thead>
-        <tbody id="statsBody"></tbody>
+        <tbody id="recordsBody">
+          <tr>
+            <td colspan="2" style="color:#666;">まだ記録がありません</td>
+          </tr>
+        </tbody>
       </table>
-    </div>
 
-    <!-- ルールは下へ -->
+      <!-- Clear records button far away -->
+      <div class="danger-zone">
+        <button id="clearRecordsButton" class="danger-btn">記録を消去</button>
+      </div>
+    </section>
+
+    <!-- Rules (below records; no overlap) -->
     <div class="rules">
       <strong>ルール</strong>
       <ul>
@@ -337,113 +391,99 @@
       </ul>
     </div>
 
-    <p class="answer-hint" id="showAnswerHint">
+    <div class="answer-hint" id="showAnswerHint">
       （どうしても分からないときは <span>答えを見る</span>）
-    </p>
+    </div>
   </div>
 
   <script>
+    // ===== Game State =====
     let secretNumber = "";
     let attempts = 0;
     let gameOver = false;
 
-    // ===== 記録（ローカル保存）=====
-    const STATS_KEY = "hitblow_stats_v1"; // バージョン付き
-    function loadStats() {
+    // ===== Records (localStorage) =====
+    const RECORDS_KEY = "hitandblow_records_v1";
+
+    function loadRecords() {
       try {
-        const raw = localStorage.getItem(STATS_KEY);
-        const obj = raw ? JSON.parse(raw) : {};
-        return (obj && typeof obj === "object") ? obj : {};
-      } catch {
-        return {};
-      }
-    }
-    function saveStats(stats) {
-      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-    }
-    function recordClear(attemptCount) {
-      const stats = loadStats();
-      const key = String(attemptCount);
-      stats[key] = (Number(stats[key]) || 0) + 1;
-      saveStats(stats);
-      renderStats();
-    }
-    function clearStats() {
-      localStorage.removeItem(STATS_KEY);
-      renderStats();
+        const raw = localStorage.getItem(RECORDS_KEY);
+        if (!raw) return {};
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === "object") return obj;
+      } catch (_) {}
+      return {};
     }
 
-    function computeStatsSummary(stats) {
-      let totalGames = 0;
-      let sumAttempts = 0;
-      let best = null;
-
-      for (const [k, v] of Object.entries(stats)) {
-        const a = Number(k);
-        const c = Number(v);
-        if (!Number.isFinite(a) || !Number.isFinite(c)) continue;
-        totalGames += c;
-        sumAttempts += a * c;
-        if (best === null || a < best) best = a;
-      }
-
-      const avg = totalGames > 0 ? (sumAttempts / totalGames) : null;
-      return { totalGames, best, avg };
+    function saveRecords(records) {
+      localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
     }
 
-    function renderStats() {
-      const stats = loadStats();
-      const tbody = document.getElementById("statsBody");
-      const summaryEl = document.getElementById("statsSummary");
-      tbody.innerHTML = "";
+    function addRecord(clearAttempts) {
+      const records = loadRecords();
+      const key = String(clearAttempts);
+      records[key] = (records[key] || 0) + 1;
+      saveRecords(records);
+      renderRecords();
+    }
 
-      // 表示のためにキー（試行回数）昇順で並べる
-      const rows = Object.keys(stats)
-        .map(k => Number(k))
-        .filter(n => Number.isFinite(n) && n > 0)
-        .sort((a, b) => a - b);
+    function calcStats(records) {
+      const entries = Object.entries(records)
+        .map(([k, v]) => ({ n: Number(k), c: Number(v) }))
+        .filter(x => Number.isFinite(x.n) && Number.isFinite(x.c) && x.c > 0)
+        .sort((a, b) => a.n - b.n);
 
-      if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        const td1 = document.createElement("td");
-        const td2 = document.createElement("td");
-        td1.textContent = "—";
-        td2.textContent = "まだ記録がありません";
-        tr.appendChild(td1);
-        tr.appendChild(td2);
-        tbody.appendChild(tr);
-        summaryEl.textContent = "総クリア回数：0回 / ベスト：— / 平均：—";
+      const total = entries.reduce((s, x) => s + x.c, 0);
+      if (total === 0) return { total: 0, best: null, avg: null, entries: [] };
+
+      const best = entries[0].n;
+      const sum = entries.reduce((s, x) => s + x.n * x.c, 0);
+      const avg = sum / total;
+
+      return { total, best, avg, entries };
+    }
+
+    function renderRecords() {
+      const records = loadRecords();
+      const stats = calcStats(records);
+
+      const summaryEl = document.getElementById("recordsSummary");
+      const bodyEl = document.getElementById("recordsBody");
+
+      if (stats.total === 0) {
+        summaryEl.textContent = "総クリア回数：0回 / ベスト：- / 平均：-";
+        bodyEl.innerHTML = `
+          <tr>
+            <td colspan="2" style="color:#666;">まだ記録がありません</td>
+          </tr>
+        `;
         return;
       }
 
-      for (const attempt of rows) {
-        const tr = document.createElement("tr");
-        const td1 = document.createElement("td");
-        const td2 = document.createElement("td");
-        td1.textContent = `${attempt}回`;
-        td2.textContent = `${stats[String(attempt)]}回`;
-        tr.appendChild(td1);
-        tr.appendChild(td2);
-        tbody.appendChild(tr);
-      }
+      const avgText = stats.avg.toFixed(2);
+      summaryEl.textContent = `総クリア回数：${stats.total}回 / ベスト：${stats.best}回 / 平均：${avgText}回`;
 
-      const { totalGames, best, avg } = computeStatsSummary(stats);
-      const avgText = (avg === null) ? "—" : avg.toFixed(2) + "回";
-      const bestText = (best === null) ? "—" : best + "回";
-      summaryEl.textContent = `総クリア回数：${totalGames}回 / ベスト：${bestText} / 平均：${avgText}`;
+      bodyEl.innerHTML = stats.entries
+        .map(x => `<tr><td>${x.n}回</td><td>${x.c}回</td></tr>`)
+        .join("");
     }
 
-    // ===== ゲーム本体 =====
+    function clearRecords() {
+      localStorage.removeItem(RECORDS_KEY);
+      renderRecords();
+    }
+
+    // ===== Secret generator =====
     function generateSecret() {
       const digits = ["0","1","2","3","4","5","6","7","8","9"];
       let secret = "";
 
-      // 1桁目：1〜9
-      const firstIndex = Math.floor(Math.random() * 9) + 1; // 1〜9
+      // 1st digit: 1-9
+      const firstIndex = Math.floor(Math.random() * 9) + 1;
       secret += digits[firstIndex];
       digits.splice(firstIndex, 1);
 
-      // 残り3桁
+      // rest 3 digits: no duplicates
       for (let i = 0; i < 3; i++) {
         const idx = Math.floor(Math.random() * digits.length);
         secret += digits[idx];
@@ -452,25 +492,44 @@
       return secret;
     }
 
+    // ===== UI helpers =====
+    function setAttemptBadge() {
+      // 0回開始だと「0回目」になるので、入力前は1回目表示にする
+      const badge = document.getElementById("attemptCount");
+      const display = Math.max(1, attempts + 1);
+      badge.textContent = String(display);
+    }
+
+    function setMessage(text, type) {
+      const el = document.getElementById("message");
+      el.textContent = text;
+      el.className = "message" + (type ? " " + type : "");
+    }
+
+    function setLogEmptyVisible() {
+      const empty = document.getElementById("logEmpty");
+      const body = document.getElementById("logBody");
+      empty.style.display = body.children.length === 0 ? "block" : "none";
+    }
+
+    // ===== Game functions =====
     function resetGame() {
       secretNumber = generateSecret();
       attempts = 0;
       gameOver = false;
 
-      document.getElementById("attemptCount").textContent = "0";
-      const input = document.getElementById("guessInput");
-      input.value = "";
-      input.disabled = false;
+      document.getElementById("guessInput").value = "";
+      document.getElementById("guessInput").disabled = false;
       document.getElementById("guessButton").disabled = false;
 
-      const msg = document.getElementById("message");
-      msg.textContent = "";
-      msg.className = "message";
-
       document.getElementById("logBody").innerHTML = "";
+      setLogEmptyVisible();
+
+      setAttemptBadge();
+      setMessage("", "");
 
       // console.log("Secret:", secretNumber);
-      input.focus();
+      document.getElementById("guessInput").focus();
     }
 
     function validateGuess(guess) {
@@ -485,7 +544,6 @@
     function judge(guess, secret) {
       let hits = 0;
       let blows = 0;
-
       for (let i = 0; i < 4; i++) {
         if (guess[i] === secret[i]) hits++;
         else if (secret.includes(guess[i])) blows++;
@@ -499,16 +557,16 @@
       row.className = "log-row";
 
       const idxCell = document.createElement("div");
-      idxCell.textContent = attempts;
+      idxCell.textContent = String(attempts);
 
       const guessCell = document.createElement("div");
       guessCell.textContent = guess;
 
       const hitCell = document.createElement("div");
-      hitCell.textContent = hits;
+      hitCell.textContent = String(hits);
 
       const blowCell = document.createElement("div");
-      blowCell.textContent = blows;
+      blowCell.textContent = String(blows);
 
       row.appendChild(idxCell);
       row.appendChild(guessCell);
@@ -516,58 +574,50 @@
       row.appendChild(blowCell);
 
       logBody.prepend(row);
-    }
-
-    function endGameUI() {
-      gameOver = true;
-      const input = document.getElementById("guessInput");
-      input.disabled = true;
-      document.getElementById("guessButton").disabled = true;
+      setLogEmptyVisible();
     }
 
     function handleGuess() {
       if (gameOver) return;
 
       const input = document.getElementById("guessInput");
-      const messageEl = document.getElementById("message");
-
       const rawGuess = input.value.trim();
-      const error = validateGuess(rawGuess);
 
+      const error = validateGuess(rawGuess);
       if (error) {
-        messageEl.textContent = error;
-        messageEl.className = "message error";
+        setMessage(error, "error");
         return;
       }
 
       attempts++;
-      document.getElementById("attemptCount").textContent = String(attempts);
+      setAttemptBadge();
 
       const result = judge(rawGuess, secretNumber);
       addLogRow(rawGuess, result.hits, result.blows);
 
       if (result.hits === 4) {
-        messageEl.textContent = `正解！ ${attempts}回目で当てました。`;
-        messageEl.className = "message ok";
-        endGameUI();
+        setMessage(`正解！ ${attempts}回で当てました。`, "ok");
+        gameOver = true;
+        input.disabled = true;
+        document.getElementById("guessButton").disabled = true;
 
-        // ★クリア記録を保存
-        recordClear(attempts);
+        // record
+        addRecord(attempts);
       } else {
-        messageEl.textContent = `ヒント：ヒット ${result.hits}、ブロー ${result.blows}`;
-        messageEl.className = "message";
+        setMessage(`ヒント：ヒット ${result.hits}、ブロー ${result.blows}`, "");
       }
 
       input.value = "";
       input.focus();
     }
 
+    // ===== Events =====
     window.addEventListener("DOMContentLoaded", () => {
       const guessBtn = document.getElementById("guessButton");
       const resetBtn = document.getElementById("resetButton");
       const input = document.getElementById("guessInput");
       const showAnswerHint = document.getElementById("showAnswerHint");
-      const clearStatsBtn = document.getElementById("clearStatsButton");
+      const clearRecordsBtn = document.getElementById("clearRecordsButton");
 
       guessBtn.addEventListener("click", handleGuess);
       resetBtn.addEventListener("click", resetGame);
@@ -578,18 +628,20 @@
 
       showAnswerHint.addEventListener("click", () => {
         if (!secretNumber) return;
-        const msg = document.getElementById("message");
-        msg.textContent = `答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`;
-        msg.className = "message ok";
-        endGameUI();
+        setMessage(`答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`, "ok");
+        gameOver = true;
+        input.disabled = true;
+        document.getElementById("guessButton").disabled = true;
       });
 
-      clearStatsBtn.addEventListener("click", () => {
-        // 誤操作が不安なら confirm を入れてもOK
-        clearStats();
+      clearRecordsBtn.addEventListener("click", () => {
+        const ok = confirm("記録を消去します。よろしいですか？");
+        if (!ok) return;
+        clearRecords();
+        setMessage("記録を消去しました。", "ok");
       });
 
-      renderStats();
+      renderRecords();
       resetGame();
     });
   </script>
