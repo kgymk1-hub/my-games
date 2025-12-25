@@ -186,6 +186,15 @@
       filter: brightness(1.06);
     }
 
+    /* タップ瞬間の一瞬ハイライト（少し強め） */
+    .cell.tap-hl:not(.empty) {
+      box-shadow:
+        0 0 0 3px rgba(255,255,255,0.55) inset,
+        0 8px 18px rgba(0,0,0,0.65);
+      filter: brightness(1.12);
+      transform: translateY(-1px);
+    }
+
     /* 記号（色覚多様性対応） */
     .symbol {
       position: absolute;
@@ -364,6 +373,9 @@
     // 色覚多様性：色ごとの記号（色数に応じて先頭から使う）
     const SYMBOLS = ["●", "■", "▲", "★", "◆", "✦", "✚"];
 
+    // 「タップした瞬間」に一瞬ハイライトしてから消す待ち時間
+    const TAP_HL_MS = 110;
+
     // ===== 設定（UI＝ゲーム反映は即時） =====
     let COLS = 10;
     let ROWS = 12;
@@ -382,8 +394,11 @@
     let redoStack = [];
 
     // ハイライト管理
-    let highlighted = []; // [[r,c], ...]
+    let highlighted = []; // [[r,c], ...] : hover用(hl)
     let lastHoverCellKey = ""; // "r,c"
+
+    // 入力ロック（タップ瞬間ハイライト中など）
+    let isResolving = false;
 
     // ===== DOM =====
     const gridEl = document.getElementById("grid");
@@ -449,8 +464,18 @@
     }
 
     function updateUndoRedoButtons() {
-      undoBtn.disabled = undoStack.length === 0;
-      redoBtn.disabled = redoStack.length === 0;
+      undoBtn.disabled = undoStack.length === 0 || isResolving;
+      redoBtn.disabled = redoStack.length === 0 || isResolving;
+    }
+
+    function setBusy(busy) {
+      isResolving = busy;
+      // 連打・割り込み防止（必要最低限）
+      newGameBtn.disabled = busy;
+      resetHighBtn.disabled = busy;
+      sizeSelect.disabled = busy;
+      colorSelect.disabled = busy;
+      updateUndoRedoButtons();
     }
 
     function pushUndoState() {
@@ -480,6 +505,7 @@
     }
 
     function undo() {
+      if (isResolving) return;
       if (undoStack.length === 0) return;
       const current = {
         board: deepCopyBoard(board),
@@ -494,6 +520,7 @@
     }
 
     function redo() {
+      if (isResolving) return;
       if (redoStack.length === 0) return;
       const current = {
         board: deepCopyBoard(board),
@@ -568,7 +595,7 @@
       gameOver = false;
       undoStack = [];
       redoStack = [];
-      updateUndoRedoButtons();
+      setBusy(false);
       clearHighlight();
       setMessage("");
       deltaEl.textContent = "";
@@ -595,7 +622,7 @@
 
       updateStatus();
       renderBoard();
-      saveHighScoreIfNeeded(); // 0でも整合のため（表示はそのまま）
+      saveHighScoreIfNeeded();
 
       setTimeout(() => gridEl.classList.remove("animate"), 260);
 
@@ -645,13 +672,16 @@
       }
     }
 
-    // ===== ハイライト =====
+    // ===== ハイライト（hover用） =====
     function idxOf(r, c) {
       return r * COLS + c;
     }
 
     function clearHighlight() {
-      if (highlighted.length === 0) return;
+      if (highlighted.length === 0) {
+        lastHoverCellKey = "";
+        return;
+      }
       for (const [r, c] of highlighted) {
         const i = idxOf(r, c);
         const el = gridEl.children[i];
@@ -663,6 +693,7 @@
 
     function highlightClusterAt(r, c) {
       if (gameOver) return;
+      if (isResolving) return;
 
       const key = `${r},${c}`;
       if (key === lastHoverCellKey) return;
@@ -684,9 +715,51 @@
       }
     }
 
+    // ===== タップ瞬間ハイライト（tap-hl） =====
+    function flashTapHighlight(cluster) {
+      for (const [rr, cc] of cluster) {
+        const i = idxOf(rr, cc);
+        const el = gridEl.children[i];
+        if (el) el.classList.add("tap-hl");
+      }
+      setTimeout(() => {
+        for (const [rr, cc] of cluster) {
+          const i = idxOf(rr, cc);
+          const el = gridEl.children[i];
+          if (el) el.classList.remove("tap-hl");
+        }
+      }, TAP_HL_MS);
+    }
+
     // ===== ゲームロジック =====
-    function onGridClick(e) {
+    function performMove(cluster) {
+      // Undo保存（“消す直前の状態”を保存）
+      pushUndoState();
+
+      const n = cluster.length;
+      const gained = n * n * SCORE_FACTOR;
+      score += gained;
+
+      for (const [rr, cc] of cluster) {
+        board[rr][cc] = null;
+      }
+
+      applyGravity();
+      shiftColumnsLeft();
+
+      clearHighlight();
+      updateStatus();
+      renderBoard();
+
+      showDelta(`${n}個消し +${gained}`);
+      saveHighScoreIfNeeded();
+      checkGameEnd();
+    }
+
+    // 「タップした瞬間に一瞬ハイライト」→ 少し待ってから消す
+    function onGridPointerDown(e) {
       if (gameOver) return;
+      if (isResolving) return;
 
       const cell = e.target.closest(".cell");
       if (!cell || !gridEl.contains(cell)) return;
@@ -702,30 +775,19 @@
       const cluster = getCluster(r, c, color);
       if (cluster.length < 2) return;
 
-      // Undo保存
-      pushUndoState();
+          // ここで「タップ瞬間」ハイライト
+      setBusy(true);
+      clearHighlight(); // hoverの縁取りは消して、タップのほうを優先
+      flashTapHighlight(cluster);
 
-      // スコア加算
-      const n = cluster.length;
-      const gained = n * n * SCORE_FACTOR;
-      score += gained;
+      // iOS等で後続のclick/ズームを誘発しにくくする
+      e.preventDefault();
 
-      // 消す
-      for (const [rr, cc] of cluster) {
-        board[rr][cc] = null;
-      }
-
-      applyGravity();
-      shiftColumnsLeft();
-
-      clearHighlight();
-      updateStatus();
-      renderBoard();
-
-      showDelta(`${n}個消し +${gained}`);
-
-      saveHighScoreIfNeeded();
-      checkGameEnd();
+      setTimeout(() => {
+        // 念のため、状態が変わっていない前提で実行
+        performMove(cluster);
+        setBusy(false);
+      }, TAP_HL_MS);
     }
 
     function onGridPointerMove(e) {
@@ -846,6 +908,7 @@
 
     // ===== 操作 =====
     function startNewGame() {
+      if (isResolving) return;
       applySettingsFromUI();
       saveLastSettingsFromUI();
       initBoard();
@@ -857,6 +920,7 @@
     }
 
     function resetHighScore() {
+      if (isResolving) return;
       if (!confirm("今のサイズ＆色数のハイスコアをリセットしますか？")) return;
       localStorage.removeItem(HIGH_KEY);
       loadHighScore();
@@ -871,7 +935,8 @@
     sizeSelect.addEventListener("change", onSettingsChanged);
     colorSelect.addEventListener("change", onSettingsChanged);
 
-    gridEl.addEventListener("click", onGridClick);
+    // ★クリックではなく pointerdown で「タップ瞬間」を取る
+    gridEl.addEventListener("pointerdown", onGridPointerDown);
     gridEl.addEventListener("pointermove", onGridPointerMove);
     gridEl.addEventListener("pointerleave", onGridPointerLeave);
 
