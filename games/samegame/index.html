@@ -88,14 +88,29 @@
       margin: 6px 0 10px;
     }
 
+    /* JSから列数だけ渡してレイアウトはCSS側に寄せる */
     .grid {
+      --cols: 10;
+      width: 100%;
+      max-width: 320px;
       display: grid;
+      grid-template-columns: repeat(var(--cols), 1fr);
       gap: 3px;
       background: #1a1f2a;
       padding: 5px;
       border-radius: 10px;
       box-shadow: inset 0 0 8px rgba(0,0,0,0.6);
-      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    /* 初回生成（ニューゲーム直後）だけ軽く出現アニメ */
+    .grid.animate .cell:not(.empty) {
+      animation: popIn 0.22s ease-out;
     }
 
     .cell {
@@ -109,6 +124,11 @@
       transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.12s ease;
       position: relative;
       overflow: hidden;
+
+      /* スマホの誤ズーム抑止 */
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     .cell-inner {
@@ -158,6 +178,11 @@
       box-shadow: 0 3px 10px rgba(79,125,255,0.5);
       transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.15s;
       white-space: nowrap;
+
+      /* スマホの誤ズーム抑止 */
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     button:active {
@@ -243,17 +268,33 @@
   </div>
 
   <script>
-    let COLS = 10;     // 横
-    let ROWS = 12;     // 縦
-    let COLORS = 5;    // 色数
+    // ===== 定数 =====
     const SCORE_FACTOR = 5;
 
-    let HIGH_KEY = "";
+    // 前回「ニューゲームで開始した設定」を保存するキー
+    const LAST_SETTINGS_KEY = "samegameLastSettings_v1";
+
+    // ===== ゲーム本体が使う設定（プレイ中に変わらない） =====
+    let GAME_COLS = 10;
+    let GAME_ROWS = 12;
+    let GAME_COLORS = 5;
+
+    // ===== UIで選択中の設定（プレビュー用） =====
+    let SEL_COLS = 10;
+    let SEL_ROWS = 12;
+    let SEL_COLORS = 5;
+
+    // ハイスコアキー（ゲーム用 / UI選択用）
+    let GAME_HIGH_KEY = "";
+    let SEL_HIGH_KEY = "";
+
+    // ===== ゲーム状態 =====
     let board = [];
     let score = 0;
     let moves = 0;
     let gameOver = false;
 
+    // ===== DOM =====
     const gridEl = document.getElementById("grid");
     const scoreEl = document.getElementById("score");
     const movesEl = document.getElementById("moves");
@@ -269,69 +310,131 @@
       return `samegameHighScore_${cols}x${rows}_c${colors}`;
     }
 
-    function loadHighScore() {
-      const raw = localStorage.getItem(HIGH_KEY);
+    // UI選択値を読む
+    function readSettingsFromUI() {
+      const sizeVal = sizeSelect.value; // "10x12" など
+      const [colsStr, rowsStr] = sizeVal.split("x");
+      return {
+        cols: parseInt(colsStr, 10),
+        rows: parseInt(rowsStr, 10),
+        colors: parseInt(colorSelect.value, 10),
+        sizeVal,
+        colorVal: colorSelect.value
+      };
+    }
+
+    // UIに設定を反映（存在するoptionのみ）
+    function applySettingsToUI(sizeVal, colorVal) {
+      if (typeof sizeVal === "string") {
+        const ok = Array.from(sizeSelect.options).some(o => o.value === sizeVal);
+        if (ok) sizeSelect.value = sizeVal;
+      }
+      if (typeof colorVal === "string") {
+        const ok = Array.from(colorSelect.options).some(o => o.value === colorVal);
+        if (ok) colorSelect.value = colorVal;
+      }
+    }
+
+    // 前回遊んだ設定をUIに復元（ニューゲームで開始した設定）
+    function loadLastPlayedSettingsIntoUI() {
+      try {
+        const raw = localStorage.getItem(LAST_SETTINGS_KEY);
+        if (!raw) return;
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj !== "object") return;
+        applySettingsToUI(obj.size, obj.colors);
+      } catch (_) {
+        // 壊れたJSON等は無視
+      }
+    }
+
+    // 前回遊んだ設定を保存（ニューゲームで開始したとき）
+    function saveLastPlayedSettingsFromUI() {
+      const s = readSettingsFromUI();
+      const payload = { size: s.sizeVal, colors: s.colorVal };
+      localStorage.setItem(LAST_SETTINGS_KEY, JSON.stringify(payload));
+    }
+
+    // UI選択中の設定に対するハイスコアを表示（ゲーム設定は変えない）
+    function updateHighScorePreviewFromUI() {
+      const s = readSettingsFromUI();
+      SEL_COLS = s.cols;
+      SEL_ROWS = s.rows;
+      SEL_COLORS = s.colors;
+
+      SEL_HIGH_KEY = getHighScoreKey(SEL_COLS, SEL_ROWS, SEL_COLORS);
+
+      const raw = localStorage.getItem(SEL_HIGH_KEY);
       const val = raw ? parseInt(raw, 10) : 0;
       highScoreEl.textContent = isNaN(val) ? 0 : val;
     }
 
+    // ゲーム設定を「選択中（SEL_）」に同期（ニューゲーム開始時だけ）
+    function applyGameSettingsFromSelection() {
+      GAME_COLS = SEL_COLS;
+      GAME_ROWS = SEL_ROWS;
+      GAME_COLORS = SEL_COLORS;
+
+      GAME_HIGH_KEY = SEL_HIGH_KEY;
+
+      // 列数だけCSS変数で渡す（サイズ計算はブラウザに任せる）
+      gridEl.style.setProperty("--cols", String(GAME_COLS));
+    }
+
+    // ハイスコア保存（ゲーム設定で保存）
     function saveHighScoreIfNeeded() {
-      const currentHigh = parseInt(highScoreEl.textContent, 10) || 0;
-      if (score > currentHigh) {
-        localStorage.setItem(HIGH_KEY, String(score));
-        highScoreEl.textContent = score;
+      const raw = localStorage.getItem(GAME_HIGH_KEY);
+      const currentHigh = raw ? parseInt(raw, 10) : 0;
+      const hi = isNaN(currentHigh) ? 0 : currentHigh;
+
+      if (score > hi) {
+        localStorage.setItem(GAME_HIGH_KEY, String(score));
+      }
+
+      // 表示中の設定がゲームと同じ場合のみ、表示も更新
+      if (SEL_HIGH_KEY === GAME_HIGH_KEY) {
+        const shown = parseInt(highScoreEl.textContent, 10) || 0;
+        if (score > shown) highScoreEl.textContent = String(score);
       }
     }
 
-    // UI設定を反映（サイズ＆色数）
-    function applySettingsFromUI() {
-      const sizeVal = sizeSelect.value; // "10x12" など
-      const [colsStr, rowsStr] = sizeVal.split("x");
-      COLS = parseInt(colsStr, 10);
-      ROWS = parseInt(rowsStr, 10);
-      COLORS = parseInt(colorSelect.value, 10);
-
-      HIGH_KEY = getHighScoreKey(COLS, ROWS, COLORS);
-      loadHighScore();
-
-      // グリッド幅を列数に応じて調整（ざっくりめ）
-      const baseCellSize = 24; // px目安
-      const gridWidth = Math.min(320, COLS * (baseCellSize + 4));
-      gridEl.style.width = gridWidth + "px";
-      gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
-    }
-
-    // 新しい盤面をランダム生成
+    // 新しい盤面をランダム生成（詰み盤面なら引き直し）
     function initBoard() {
-      board = [];
-      for (let r = 0; r < ROWS; r++) {
-        const row = [];
-        for (let c = 0; c < COLS; c++) {
-          const colorIndex = Math.floor(Math.random() * COLORS);
-          row.push(colorIndex);
-        }
-        board.push(row);
-      }
       score = 0;
       moves = 0;
       gameOver = false;
-      updateStatus();
       messageEl.textContent = "";
       messageEl.className = "message";
+
+      // 生成直後だけ軽くアニメ
+      gridEl.classList.add("animate");
+
+      for (let tries = 0; tries < 300; tries++) {
+        const b = [];
+        for (let r = 0; r < GAME_ROWS; r++) {
+          const row = [];
+          for (let c = 0; c < GAME_COLS; c++) {
+            row.push(Math.floor(Math.random() * GAME_COLORS));
+          }
+          b.push(row);
+        }
+        board = b;
+        if (hasAnyMove()) break;
+      }
+
+      updateStatus();
       renderBoard();
 
-      // 初期状態で詰んでいたら引き直し（レアケース）
-      if (!hasAnyMove()) {
-        initBoard();
-      }
+      // アニメ解除（短時間だけ）
+      setTimeout(() => gridEl.classList.remove("animate"), 260);
     }
 
-    // DOM描画
+    // DOM描画（イベントはデリゲーションで1回だけ付けるので、ここでは付けない）
     function renderBoard() {
       gridEl.innerHTML = "";
 
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < GAME_ROWS; r++) {
+        for (let c = 0; c < GAME_COLS; c++) {
           const cell = document.createElement("div");
           const inner = document.createElement("div");
           inner.className = "cell-inner";
@@ -344,9 +447,8 @@
             cell.classList.add("empty");
           } else {
             cell.classList.add(`color-${colorIndex}`);
-            cell.dataset.row = r;
-            cell.dataset.col = c;
-            cell.addEventListener("click", onCellClick);
+            cell.dataset.row = String(r);
+            cell.dataset.col = String(c);
           }
 
           gridEl.appendChild(cell);
@@ -354,24 +456,26 @@
       }
     }
 
-    // クリック時処理
-    function onCellClick(e) {
+    // グリッドクリック（イベントデリゲーション）
+    function onGridClick(e) {
       if (gameOver) return;
 
-      const cell = e.currentTarget;
+      const cell = e.target.closest(".cell");
+      if (!cell || !gridEl.contains(cell)) return;
+      if (cell.classList.contains("empty")) return;
+
       const r = parseInt(cell.dataset.row, 10);
       const c = parseInt(cell.dataset.col, 10);
+      if (!Number.isFinite(r) || !Number.isFinite(c)) return;
+
       const color = board[r][c];
       if (color === null) return;
 
       const cluster = getCluster(r, c, color);
-      if (cluster.length < 2) {
-        return; // 1個だけは消せない
-      }
+      if (cluster.length < 2) return; // 1個だけは消せない
 
       const n = cluster.length;
-      const gained = n * n * SCORE_FACTOR;
-      score += gained;
+      score += n * n * SCORE_FACTOR;
       moves++;
 
       // クラスタを消す
@@ -388,17 +492,18 @@
 
     // 同色クラスター探索（4方向）
     function getCluster(sr, sc, color) {
-      const visited = Array.from({ length: ROWS }, () =>
-        Array(COLS).fill(false)
+      const visited = Array.from({ length: GAME_ROWS }, () =>
+        Array(GAME_COLS).fill(false)
       );
       const stack = [[sr, sc]];
       const cluster = [];
 
       while (stack.length > 0) {
         const [r, c] = stack.pop();
-        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+        if (r < 0 || r >= GAME_ROWS || c < 0 || c >= GAME_COLS) continue;
         if (visited[r][c]) continue;
         if (board[r][c] !== color) continue;
+
         visited[r][c] = true;
         cluster.push([r, c]);
 
@@ -413,20 +518,14 @@
 
     // 下方向への重力
     function applyGravity() {
-      for (let c = 0; c < COLS; c++) {
+      for (let c = 0; c < GAME_COLS; c++) {
         const columnValues = [];
-        for (let r = ROWS - 1; r >= 0; r--) {
-          if (board[r][c] !== null) {
-            columnValues.push(board[r][c]);
-          }
+        for (let r = GAME_ROWS - 1; r >= 0; r--) {
+          if (board[r][c] !== null) columnValues.push(board[r][c]);
         }
         let idx = 0;
-        for (let r = ROWS - 1; r >= 0; r--) {
-          if (idx < columnValues.length) {
-            board[r][c] = columnValues[idx++];
-          } else {
-            board[r][c] = null;
-          }
+        for (let r = GAME_ROWS - 1; r >= 0; r--) {
+          board[r][c] = (idx < columnValues.length) ? columnValues[idx++] : null;
         }
       }
     }
@@ -434,43 +533,37 @@
     // 空列を詰めて左寄せ
     function shiftColumnsLeft() {
       const nonEmptyCols = [];
-      for (let c = 0; c < COLS; c++) {
+      for (let c = 0; c < GAME_COLS; c++) {
         let isEmpty = true;
-        for (let r = 0; r < ROWS; r++) {
-          if (board[r][c] !== null) {
-            isEmpty = false;
-            break;
-          }
+        for (let r = 0; r < GAME_ROWS; r++) {
+          if (board[r][c] !== null) { isEmpty = false; break; }
         }
-        if (!isEmpty) {
-          nonEmptyCols.push(c);
-        }
+        if (!isEmpty) nonEmptyCols.push(c);
       }
 
-      const newBoard = Array.from({ length: ROWS }, () =>
-        Array(COLS).fill(null)
+      const newBoard = Array.from({ length: GAME_ROWS }, () =>
+        Array(GAME_COLS).fill(null)
       );
 
       for (let newC = 0; newC < nonEmptyCols.length; newC++) {
         const oldC = nonEmptyCols[newC];
-        for (let r = 0; r < ROWS; r++) {
+        for (let r = 0; r < GAME_ROWS; r++) {
           newBoard[r][newC] = board[r][oldC];
         }
       }
-
       board = newBoard;
     }
 
     // まだ消せる塊があるかチェック
     function hasAnyMove() {
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < GAME_ROWS; r++) {
+        for (let c = 0; c < GAME_COLS; c++) {
           const color = board[r][c];
           if (color === null) continue;
           if (r > 0 && board[r - 1][c] === color) return true;
-          if (r < ROWS - 1 && board[r + 1][c] === color) return true;
+          if (r < GAME_ROWS - 1 && board[r + 1][c] === color) return true;
           if (c > 0 && board[r][c - 1] === color) return true;
-          if (c < COLS - 1 && board[r][c + 1] === color) return true;
+          if (c < GAME_COLS - 1 && board[r][c + 1] === color) return true;
         }
       }
       return false;
@@ -478,8 +571,8 @@
 
     // 全部消えたか
     function isBoardEmpty() {
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < GAME_ROWS; r++) {
+        for (let c = 0; c < GAME_COLS; c++) {
           if (board[r][c] !== null) return false;
         }
       }
@@ -489,11 +582,18 @@
     function checkGameEnd() {
       if (isBoardEmpty()) {
         gameOver = true;
-        messageEl.textContent = "パーフェクトクリア！ お見事！";
+
+        // パーフェクトボーナス（盤面サイズ比例）
+        const perfectBonus = GAME_COLS * GAME_ROWS * 10;
+        score += perfectBonus;
+        updateStatus();
+
+        messageEl.textContent = `パーフェクトクリア！ ボーナス +${perfectBonus}`;
         messageEl.className = "message perfect";
         saveHighScoreIfNeeded();
         return;
       }
+
       if (!hasAnyMove()) {
         gameOver = true;
         messageEl.textContent = "これ以上消せません。ゲームオーバー。";
@@ -503,38 +603,40 @@
     }
 
     function updateStatus() {
-      scoreEl.textContent = score;
-      movesEl.textContent = moves;
+      scoreEl.textContent = String(score);
+      movesEl.textContent = String(moves);
     }
 
-    // ニューゲームボタンで現在の設定を反映して開始
+    // ニューゲーム：選択中の設定をゲームに反映して開始
     function startNewGame() {
-      applySettingsFromUI();
+      updateHighScorePreviewFromUI();     // SEL_更新（表示も更新）
+      applyGameSettingsFromSelection();   // ゲーム設定へ同期
+      saveLastPlayedSettingsFromUI();     // 前回設定として保存
       initBoard();
     }
 
-    // イベント
+    // ===== イベント =====
     newGameBtn.addEventListener("click", startNewGame);
 
     resetHighBtn.addEventListener("click", () => {
       if (confirm("今のサイズ＆色数のハイスコアをリセットしますか？")) {
-        localStorage.removeItem(HIGH_KEY);
-        highScoreEl.textContent = "0";
+        localStorage.removeItem(SEL_HIGH_KEY);
+        updateHighScorePreviewFromUI();
       }
     });
 
-    // サイズ・色数を変えたときは、ハイスコア表示だけ先に切り替え
-    sizeSelect.addEventListener("change", () => {
-      applySettingsFromUI();
-      // 盤面はそのまま／新しい条件で遊びたい時はニューゲームを押す
-    });
+    // サイズ・色数変更：ハイスコア表示だけ切り替え（プレイ中でも安全）
+    sizeSelect.addEventListener("change", updateHighScorePreviewFromUI);
+    colorSelect.addEventListener("change", updateHighScorePreviewFromUI);
 
-    colorSelect.addEventListener("change", () => {
-      applySettingsFromUI();
-    });
+    // グリッドクリック（イベントデリゲーション）
+    gridEl.addEventListener("click", onGridClick);
 
-    // 初期化
-    applySettingsFromUI();
+    // ===== 初期化 =====
+    // 前回設定をUIに復元 → その設定で自動スタート
+    loadLastPlayedSettingsIntoUI();
+    updateHighScorePreviewFromUI();
+    applyGameSettingsFromSelection();
     initBoard();
   </script>
 </body>
