@@ -7,10 +7,17 @@
   <style>
     body {
       margin: 0;
-      height: 100vh;
+
+      /* ★修正: ランキングが増えても上がはみ出さないように、中央固定をやめてスクロール可能に */
+      min-height: 100vh;
+      height: auto;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
+      padding: 16px 12px;
+      box-sizing: border-box;
+      overflow-y: auto;
+
       background: #e9eef8;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
@@ -25,7 +32,10 @@
       border-radius: 16px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.1);
       text-align: center;
-      width: 320px;
+
+      /* ★修正: 端末幅に合わせて縮む */
+      width: min(360px, 100%);
+      box-sizing: border-box;
     }
 
     h1 {
@@ -86,7 +96,7 @@
     .hiscore b { color: #2a46c6; }
 
     .rankhead {
-      margin-top: 10px;
+      margin-top: 0;
       font-weight: 700;
       font-size: 0.95rem;
       color: #2a46c6;
@@ -192,27 +202,19 @@
     return a.ts - b.ts;
   }
 
+  // ★修正: ハイスコア表示を廃止して「上位10位のリスト」だけ表示
   function renderRankings(ranks) {
     const sorted = [...ranks].sort(compareRecord).slice(0, MAX_RANK);
-    const best = sorted.length ? sorted[0] : null;
 
     let html = "";
+    html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
 
-    if (!best) {
-      html += `ハイスコア：<b>未登録</b><br>（誤差が一番小さい記録が上位になります）`;
-      html += `<div class="sep"></div>`;
-      html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
+    if (!sorted.length) {
       html += `まだ記録がありません。`;
       hiscoreDisplay.innerHTML = html;
       return;
     }
 
-    html += `ハイスコア：誤差 <b class="mono">${best.diff.toFixed(3)} 秒</b><br>`;
-    html += `記録：<span class="mono">${best.elapsed.toFixed(3)} 秒</span><br>`;
-    html += `更新：${formatDate(best.ts)}`;
-
-    html += `<div class="sep"></div>`;
-    html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
     html += `<ol class="ranklist">`;
     for (let i = 0; i < sorted.length; i++) {
       const r = sorted[i];
