@@ -723,6 +723,7 @@
       renderBoard();
 
       showDelta(`${n}個消し +${gained}`);
+
       saveHighScoreIfNeeded();
       checkGameEnd();
     }
@@ -774,4 +775,110 @@
         }
         let idx = 0;
         for (let r = ROWS - 1; r >= 0; r--) {
-          board[r][c] = (idx < col.leng
+          board[r][c] = (idx < col.length) ? col[idx++] : null;
+        }
+      }
+    }
+
+    function shiftColumnsLeft() {
+      const nonEmptyCols = [];
+      for (let c = 0; c < COLS; c++) {
+        let empty = true;
+        for (let r = 0; r < ROWS; r++) {
+          if (board[r][c] !== null) { empty = false; break; }
+        }
+        if (!empty) nonEmptyCols.push(c);
+      }
+
+      const newBoard = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+      for (let newC = 0; newC < nonEmptyCols.length; newC++) {
+        const oldC = nonEmptyCols[newC];
+        for (let r = 0; r < ROWS; r++) {
+          newBoard[r][newC] = board[r][oldC];
+        }
+      }
+      board = newBoard;
+    }
+
+    function hasAnyMove() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const color = board[r][c];
+          if (color === null) continue;
+          if (r > 0 && board[r - 1][c] === color) return true;
+          if (r < ROWS - 1 && board[r + 1][c] === color) return true;
+          if (c > 0 && board[r][c - 1] === color) return true;
+          if (c < COLS - 1 && board[r][c + 1] === color) return true;
+        }
+      }
+      return false;
+    }
+
+    function isBoardEmpty() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c] !== null) return false;
+        }
+      }
+      return true;
+    }
+
+    function checkGameEnd() {
+      if (isBoardEmpty()) {
+        gameOver = true;
+
+        const bonus = COLS * ROWS * PERFECT_FACTOR;
+        score += bonus;
+        updateStatus();
+        saveHighScoreIfNeeded();
+
+        setMessage(`パーフェクトクリア！ ボーナス +${bonus}`, "message perfect");
+        showDelta(`全消し +${bonus}`);
+        return;
+      }
+
+      if (!hasAnyMove()) {
+        gameOver = true;
+        saveHighScoreIfNeeded();
+        setMessage("これ以上消せません。ゲームオーバー。", "message over");
+      }
+    }
+
+    // ===== 操作 =====
+    function startNewGame() {
+      applySettingsFromUI();
+      saveLastSettingsFromUI();
+      initBoard();
+    }
+
+    function onSettingsChanged() {
+      // サイズ/色数変更は「直ちに」ブロックとハイスコアを更新
+      startNewGame();
+    }
+
+    function resetHighScore() {
+      if (!confirm("今のサイズ＆色数のハイスコアをリセットしますか？")) return;
+      localStorage.removeItem(HIGH_KEY);
+      loadHighScore();
+    }
+
+    // ===== イベント =====
+    newGameBtn.addEventListener("click", startNewGame);
+    undoBtn.addEventListener("click", undo);
+    redoBtn.addEventListener("click", redo);
+    resetHighBtn.addEventListener("click", resetHighScore);
+
+    sizeSelect.addEventListener("change", onSettingsChanged);
+    colorSelect.addEventListener("change", onSettingsChanged);
+
+    gridEl.addEventListener("click", onGridClick);
+    gridEl.addEventListener("pointermove", onGridPointerMove);
+    gridEl.addEventListener("pointerleave", onGridPointerLeave);
+
+    // ===== 初期化 =====
+    loadLastSettingsIntoUI();
+    applySettingsFromUI();
+    initBoard();
+  </script>
+</body>
+</html>
