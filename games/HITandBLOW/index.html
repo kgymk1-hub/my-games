@@ -441,8 +441,9 @@
       row.appendChild(hitCell);
       row.appendChild(blowCell);
 
-      // 全履歴を表示したいので「追記」にする（上に新しい履歴、等の表示も不要）
-      logBody.appendChild(row);
+      // ★新しい履歴を上に表示
+      logBody.prepend(row);
+
       updateLogEmptyState();
     }
 
@@ -578,7 +579,7 @@
         setGameEnabled(false);
         addClearRecord(attempts);
 
-        // 正解時はリセットへフォーカス（次のアクションへ誘導）
+        // ★正解時：リセットボタンへフォーカス
         document.getElementById("resetButton").focus();
       } else {
         // ヒントは不要（表示しない）
@@ -614,6 +615,9 @@
         setMessage(`答えは「${secretNumber}」です。新しく遊ぶ場合はリセットしてください。`, "ok");
         gameOver = true;
         setGameEnabled(false);
+
+        // 次の操作へ誘導
+        document.getElementById("resetButton").focus();
       });
 
       clearStatsBtn.addEventListener("click", () => {
@@ -628,4 +632,4 @@
     });
   </script>
 </body>
-  </html>
+      </html>
