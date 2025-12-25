@@ -5,54 +5,73 @@
   <title>5x5 ライツアウト</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
+    :root{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+      /* responsive sizing */
+      --containerW: min(92vw, 420px);
+      --padX: clamp(14px, 4vw, 20px);
+      --padY: clamp(14px, 4vw, 20px);
+      --gap: clamp(6px, 2.2vw, 10px);
+      --cell: clamp(42px, 13.2vw, 62px);
+    }
+
+    *{ box-sizing: border-box; }
+
+    body{
       margin: 0;
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       background: #20242b;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    .game-container {
-      background: #2a2f38;
-      padding: 20px 18px;
-      border-radius: 16px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-      width: 330px;
-      text-align: center;
       color: #e7e7e7;
     }
 
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.3rem;
-      font-weight: 600;
+    .game-container{
+      background: #2a2f38;
+      padding: var(--padY) var(--padX);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+      width: var(--containerW);
+      text-align: center;
     }
 
-    .grid {
+    h1{
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .grid{
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
+      gap: var(--gap);
       margin: 14px 0;
+      justify-items: center;
     }
 
-    /* OFF（消灯） */
-    .cell {
-      width: 55px;
-      height: 55px;
+    /* cell as button for accessibility */
+    .cell{
+      width: var(--cell);
+      height: var(--cell);
       border-radius: 10px;
       cursor: pointer;
+      border: none;
+      padding: 0;
       background: linear-gradient(145deg, #1b1d22, #262a31);
       box-shadow:
         inset 0 0 6px rgba(0,0,0,0.6),
         0 0 5px rgba(0,0,0,0.3);
-      transition: 0.15s ease;
+      transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+      -webkit-tap-highlight-color: transparent;
+
+      /* タッチ遅延/ズーム判定の抑制 */
+      touch-action: manipulation;
     }
 
-    /* ON（点灯） */
-    .cell.on {
+    .cell.on{
       background: radial-gradient(circle at center,
         #ffffff 0%,
         #e6e6ff 30%,
@@ -64,92 +83,330 @@
         inset 0 0 8px rgba(255,255,255,0.9);
     }
 
-    .cell:active {
-      transform: scale(0.95);
+    .cell:active{ transform: scale(0.96); }
+
+    .cell:focus-visible{
+      outline: 2px solid rgba(95,124,255,0.95);
+      outline-offset: 3px;
     }
 
-    .controls {
+    /* ヒント表示（一定時間だけ強調） */
+    .cell.hint{
+      box-shadow:
+        0 0 0 3px rgba(255, 211, 124, 0.75),
+        0 0 22px rgba(255, 211, 124, 0.45),
+        inset 0 0 6px rgba(0,0,0,0.5);
+      filter: brightness(1.05);
+    }
+
+    /* クリア演出：パネル点灯ウェーブ */
+    .cell.celebrate{
+      animation: celebratePulse 520ms ease-in-out;
+    }
+    @keyframes celebratePulse{
+      0%{
+        transform: scale(1);
+        filter: brightness(1);
+        box-shadow:
+          inset 0 0 6px rgba(0,0,0,0.6),
+          0 0 5px rgba(0,0,0,0.3);
+      }
+      50%{
+        transform: scale(1.03);
+        filter: brightness(1.25);
+        box-shadow:
+          0 0 18px rgba(255,255,255,0.35),
+          0 0 36px rgba(150,160,255,0.25),
+          inset 0 0 10px rgba(255,255,255,0.18);
+      }
+      100%{
+        transform: scale(1);
+        filter: brightness(1);
+      }
+    }
+
+    .disabled-ui{
+      opacity: 0.75;
+      filter: grayscale(0.15);
+      pointer-events: none;
+    }
+
+    .info-row{
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
       margin-top: 4px;
+      font-size: 0.92rem;
+    }
+
+    .stats{
+      display: grid;
+      gap: 6px;
+      text-align: left;
+      min-width: 210px;
+    }
+
+    .stats .line{
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      font-size: 0.85rem;
+      gap: 10px;
     }
 
-    button {
+    .note{
+      font-size: 0.78rem;
+      color: #cfd3dd;
+      opacity: 0.9;
+      line-height: 1.35;
+      text-align: left;
+      margin-top: 2px;
+    }
+
+    .buttons{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex: 1;
+    }
+
+    button.ctrl{
       border: none;
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 0.85rem;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
       cursor: pointer;
       background: #5f7cff;
       color: #fff;
-      transition: 0.15s ease;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
       box-shadow: 0 3px 8px rgba(95,124,255,0.4);
+      -webkit-tap-highlight-color: transparent;
     }
 
-    button:active {
-      transform: scale(0.96);
+    button.ctrl:active{
+      transform: scale(0.97);
       box-shadow: none;
     }
 
-    button.secondary {
+    button.ctrl.secondary{
       background: #404552;
-      color: #ccc;
+      color: #ddd;
       box-shadow: none;
     }
 
-    .message {
-      font-size: 0.9rem;
-      min-height: 1.3em;
-      margin-top: 10px;
+    button.ctrl:focus-visible{
+      outline: 2px solid rgba(255,255,255,0.7);
+      outline-offset: 2px;
     }
 
-    .message.clear {
+    .message{
+      font-size: 0.95rem;
+      min-height: 1.4em;
+      margin-top: 10px;
+      word-break: keep-all;
+    }
+
+    .message.clear{
       color: #7cff9f;
+      font-weight: 700;
+    }
+
+    .message.warn{
+      color: #ffd37c;
       font-weight: 600;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .cell, button.ctrl{ transition: none; }
+      .cell.celebrate{ animation: none; }
     }
   </style>
 </head>
 <body>
-  <div class="game-container">
+  <div class="game-container" id="container">
     <h1>5×5 ライツアウト</h1>
 
-    <div class="grid" id="grid"></div>
+    <div class="grid" id="grid" role="grid" aria-label="5×5 ライツアウト盤面"></div>
 
-    <div class="controls">
-      <div>手数：<span id="moveCount">0</span></div>
-      <div>
-        <button id="newGameBtn">シャッフル</button>
-        <button id="clearBtn" class="secondary">全消灯</button>
+    <div class="info-row">
+      <div class="stats" aria-label="スコア情報">
+        <div class="line"><span>手数：</span><span><span id="moveCount">0</span></span></div>
+        <div class="line"><span>タイム：</span><span><span id="timeNow">0.0</span>s</span></div>
+        <div class="line"><span>ハイスコア（手数）：</span><span id="bestMoves">—</span></div>
+        <div class="line"><span>ハイスコア（タイム）：</span><span id="bestTime">—</span></div>
+        <div class="note">
+          ※「ヒント」または「自動解答」を使ったプレイは、クリアしてもハイスコアに記録されません。<br>
+          ※タイマーは「最初の1手目（盤面操作）」でスタートします。
+        </div>
+      </div>
+
+      <div class="buttons" aria-label="操作ボタン">
+        <button id="newGameBtn" class="ctrl" type="button">シャッフル</button>
+        <button id="hintBtn" class="ctrl" type="button">ヒント</button>
+        <button id="autoSolveBtn" class="ctrl" type="button">自動解答</button>
+        <button id="clearBtn" class="ctrl secondary" type="button">全消灯</button>
       </div>
     </div>
 
-    <div id="message" class="message"></div>
+    <div id="message" class="message" aria-live="polite"></div>
   </div>
 
   <script>
     const SIZE = 5;
+    const N = SIZE * SIZE;
+
+    const BEST_MOVES_KEY   = "lightsout_5x5_best_moves_v3";
+    const BEST_TIME_MS_KEY = "lightsout_5x5_best_time_ms_v3";
+
     let board = [];
     let moveCount = 0;
 
+    // assist flags (hint / auto)
+    let assistUsed = false;
+
+    // game start (timer starts on first move)
+    let gameStarted = false;
+
+    // auto solver state
+    let isAutoSolving = false;
+    let autoToken = 0;
+
+    // timer
+    let timerRunning = false;
+    let timerStartPerf = 0;
+    let elapsedMs = 0;
+    let rafId = 0;
+
+    // hint highlight
+    let hintTimeoutId = 0;
+    let lastHintIndex = -1;
+
+    // clear animation token
+    let clearAnimToken = 0;
+
+    const containerEl = document.getElementById("container");
     const gridEl = document.getElementById("grid");
     const moveCountEl = document.getElementById("moveCount");
+    const timeNowEl = document.getElementById("timeNow");
+    const bestMovesEl = document.getElementById("bestMoves");
+    const bestTimeEl = document.getElementById("bestTime");
     const messageEl = document.getElementById("message");
+
     const newGameBtn = document.getElementById("newGameBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const autoSolveBtn = document.getElementById("autoSolveBtn");
+    const hintBtn = document.getElementById("hintBtn");
 
-    function createGrid() {
+    function idx(r, c){ return r * SIZE + c; }
+
+    function setMessage(text, kind){
+      messageEl.textContent = text || "";
+      messageEl.className = "message" + (kind ? (" " + kind) : "");
+    }
+
+    function lockUI(lock){
+      if (lock){
+        containerEl.classList.add("disabled-ui");
+        messageEl.style.pointerEvents = "auto";
+      }else{
+        containerEl.classList.remove("disabled-ui");
+        messageEl.style.pointerEvents = "";
+      }
+    }
+
+    // ----- high score (moves / time) -----
+    function loadBestMoves(){
+      const v = localStorage.getItem(BEST_MOVES_KEY);
+      if (v === null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    }
+
+    function loadBestTimeMs(){
+      const v = localStorage.getItem(BEST_TIME_MS_KEY);
+      if (v === null) return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    }
+
+    function setBestMoves(n){
+      localStorage.setItem(BEST_MOVES_KEY, String(n));
+      renderBestScores();
+    }
+
+    function setBestTimeMs(ms){
+      localStorage.setItem(BEST_TIME_MS_KEY, String(ms));
+      renderBestScores();
+    }
+
+    function formatSeconds(ms){
+      const s = ms / 1000;
+      return s.toFixed(1); // 0.1秒単位
+    }
+
+    function renderBestScores(){
+      const bm = loadBestMoves();
+      bestMovesEl.textContent = (bm === null) ? "—" : `${bm}手`;
+
+      const bt = loadBestTimeMs();
+      bestTimeEl.textContent = (bt === null) ? "—" : `${formatSeconds(bt)}s`;
+    }
+
+    // ----- timer -----
+    function updateTimeNow(){
+      timeNowEl.textContent = formatSeconds(elapsedMs);
+    }
+
+    function startTimer(){
+      if (timerRunning) return;
+      timerRunning = true;
+      timerStartPerf = performance.now();
+      elapsedMs = 0;
+      updateTimeNow();
+
+      const tick = () => {
+        if (!timerRunning) return;
+        elapsedMs = performance.now() - timerStartPerf;
+        updateTimeNow();
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function stopTimer(){
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+
+      if (timerRunning){
+        elapsedMs = performance.now() - timerStartPerf;
+      }
+      timerRunning = false;
+      updateTimeNow();
+    }
+
+    function resetTimer(){
+      stopTimer();
+      elapsedMs = 0;
+      updateTimeNow();
+    }
+
+    // ----- grid -----
+    function createGrid(){
       gridEl.innerHTML = "";
       board = [];
 
-      for (let r = 0; r < SIZE; r++) {
+      for (let r = 0; r < SIZE; r++){
         const row = [];
-        for (let c = 0; c < SIZE; c++) {
-          const cell = document.createElement("div");
+        for (let c = 0; c < SIZE; c++){
+          const cell = document.createElement("button");
+          cell.type = "button";
           cell.className = "cell";
           cell.dataset.row = r;
           cell.dataset.col = c;
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("aria-pressed", "false");
+          cell.setAttribute("aria-label", `行${r+1} 列${c+1} 消灯`);
           cell.addEventListener("click", onCellClick);
           gridEl.appendChild(cell);
           row.push(false);
@@ -158,86 +415,431 @@
       }
     }
 
-    function resetMoves() {
-      moveCount = 0;
-      moveCountEl.textContent = "0";
-      messageEl.textContent = "";
-      messageEl.className = "message";
+    function updateCellView(r, c){
+      const cell = gridEl.children[idx(r,c)];
+      const on = board[r][c];
+      cell.classList.toggle("on", on);
+      cell.setAttribute("aria-pressed", on ? "true" : "false");
+      cell.setAttribute("aria-label", `行${r+1} 列${c+1} ${on ? "点灯" : "消灯"}`);
     }
 
-    function toggleCell(r, c) {
+    function clearHintHighlight(){
+      if (hintTimeoutId) clearTimeout(hintTimeoutId);
+      hintTimeoutId = 0;
+
+      if (lastHintIndex >= 0 && gridEl.children[lastHintIndex]){
+        gridEl.children[lastHintIndex].classList.remove("hint");
+      }
+      lastHintIndex = -1;
+    }
+
+    function resetMoves(){
+      moveCount = 0;
+      moveCountEl.textContent = "0";
+      clearHintHighlight();
+      setMessage("", "");
+    }
+
+    function toggleCell(r, c){
       if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return;
       board[r][c] = !board[r][c];
       updateCellView(r, c);
     }
 
-    function updateCellView(r, c) {
-      const index = r * SIZE + c;
-      const cell = gridEl.children[index];
-      if (board[r][c]) {
-        cell.classList.add("on");
-      } else {
-        cell.classList.remove("on");
-      }
-    }
-
-    function onCellClick(e) {
-      const r = parseInt(e.currentTarget.dataset.row);
-      const c = parseInt(e.currentTarget.dataset.col);
-
-      applyMove(r, c, true);
-    }
-
-    function applyMove(r, c, countAsMove) {
+    function applyMove(r, c, countAsMove, source){
       toggleCell(r, c);
       toggleCell(r - 1, c);
       toggleCell(r + 1, c);
       toggleCell(r, c - 1);
       toggleCell(r, c + 1);
 
-      if (countAsMove) {
+      if (countAsMove){
         moveCount++;
-        moveCountEl.textContent = moveCount;
-        checkClear();
+        moveCountEl.textContent = String(moveCount);
+        checkClear(source || "manual");
       }
     }
 
-    function checkClear() {
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
-          if (board[r][c]) return;
+    function ensureTimerStartedOnFirstMove(){
+      if (!gameStarted){
+        gameStarted = true;
+        startTimer();
+      }
+    }
+
+    function onCellClick(e){
+      if (isAutoSolving) return;
+
+      // タイマーは最初の盤面操作で開始
+      ensureTimerStartedOnFirstMove();
+
+      const r = parseInt(e.currentTarget.dataset.row, 10);
+      const c = parseInt(e.currentTarget.dataset.col, 10);
+      applyMove(r, c, true, "manual");
+    }
+
+    function isAllOff(){
+      for (let r = 0; r < SIZE; r++){
+        for (let c = 0; c < SIZE; c++){
+          if (board[r][c]) return false;
         }
       }
-      messageEl.textContent = `クリア！ おめでとう（${moveCount}手）`;
-      messageEl.className = "message clear";
+      return true;
     }
 
-    function setAllOff() {
-      for (let r = 0; r < SIZE; r++) {
-        for (let c = 0; c < SIZE; c++) {
+    // ----- clear animation -----
+    function playClearAnimation(){
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) return;
+
+      clearAnimToken++;
+      const my = clearAnimToken;
+
+      // stagger wave by manhattan distance from top-left (or centerでもOK)
+      const maxDelay = 60; // ms step
+      const duration = 520; // must match CSS
+      for (let r = 0; r < SIZE; r++){
+        for (let c = 0; c < SIZE; c++){
+          const d = (r + c);
+          const delay = d * maxDelay;
+          const i = idx(r,c);
+          const cell = gridEl.children[i];
+
+          // reset first (in case)
+          cell.classList.remove("celebrate");
+
+          setTimeout(() => {
+            if (my !== clearAnimToken) return;
+            cell.classList.add("celebrate");
+            setTimeout(() => {
+              if (my !== clearAnimToken) return;
+              cell.classList.remove("celebrate");
+            }, duration + 30);
+          }, delay);
+        }
+      }
+    }
+
+    function checkClear(source){
+      if (!isAllOff()) return;
+
+      stopTimer();
+      playClearAnimation();
+
+      if (source === "auto"){
+        setMessage(`自動解答完了（${moveCount}手 / ${formatSeconds(elapsedMs)}s）`, "clear");
+        return; // 自動解答は記録しない
+      }
+
+      if (assistUsed){
+        setMessage(`クリア！（${moveCount}手 / ${formatSeconds(elapsedMs)}s）※ヒント/自動解答使用のため記録なし`, "clear");
+        return;
+      }
+
+      setMessage(`クリア！ おめでとう（${moveCount}手 / ${formatSeconds(elapsedMs)}s）`, "clear");
+
+      const bestMoves = loadBestMoves();
+      if (bestMoves === null || moveCount < bestMoves){
+        setBestMoves(moveCount);
+      }
+
+      const bestTime = loadBestTimeMs();
+      const ms = Math.max(0, Math.round(elapsedMs));
+      if (bestTime === null || ms < bestTime){
+        setBestTimeMs(ms);
+      }
+    }
+
+    function stopAutoSolveIfRunning(){
+      if (!isAutoSolving) return;
+      isAutoSolving = false;
+      autoToken++;
+      lockUI(false);
+    }
+
+    function setAllOff(){
+      stopAutoSolveIfRunning();
+
+      for (let r = 0; r < SIZE; r++){
+        for (let c = 0; c < SIZE; c++){
           board[r][c] = false;
           updateCellView(r, c);
         }
       }
+
+      assistUsed = false;
+      gameStarted = false;
       resetMoves();
+      resetTimer();
+      setMessage("", "");
     }
 
-    function randomizeBoard() {
-      setAllOff();
-      const randomMoves = 10 + Math.floor(Math.random() * 15);
-      for (let i = 0; i < randomMoves; i++) {
-        const r = Math.floor(Math.random() * SIZE);
-        const c = Math.floor(Math.random() * SIZE);
-        applyMove(r, c, false);
+    function startNewGameState(){
+      // シャッフル後：タイマーは「待機（0.0s）」、最初の手で開始
+      assistUsed = false;
+      gameStarted = false;
+      resetMoves();
+      resetTimer();
+      clearHintHighlight();
+      setMessage("", "");
+    }
+
+    function randomizeBoard(){
+      if (isAutoSolving) return;
+
+      stopAutoSolveIfRunning();
+      clearHintHighlight();
+
+      const maxAttempts = 30;
+      let attempt = 0;
+
+      while (attempt < maxAttempts){
+        // all off
+        for (let r = 0; r < SIZE; r++){
+          for (let c = 0; c < SIZE; c++){
+            board[r][c] = false;
+            updateCellView(r, c);
+          }
+        }
+
+        const randomMoves = 10 + Math.floor(Math.random() * 15);
+        for (let i = 0; i < randomMoves; i++){
+          const r = Math.floor(Math.random() * SIZE);
+          const c = Math.floor(Math.random() * SIZE);
+          applyMove(r, c, false, "shuffle");
+        }
+
+        if (!isAllOff()){
+          startNewGameState();
+          return;
+        }
+        attempt++;
       }
-      resetMoves();
+
+      setMessage("シャッフルが偏りました。もう一度押してね。", "warn");
     }
 
-    newGameBtn.addEventListener("click", randomizeBoard);
-    clearBtn.addEventListener("click", setAllOff);
+    // --------- Auto Solver (Gaussian elimination over GF(2)) ----------
+    function buildAugmentedMatrix(){
+      // row i: sum(move_j affects cell i) = currentState(i) (mod 2)
+      // packed into 32-bit: bits [0..N-1]=vars, bit N=RHS
+      const rows = new Array(N).fill(0);
 
+      for (let r = 0; r < SIZE; r++){
+        for (let c = 0; c < SIZE; c++){
+          const eqIndex = idx(r,c);
+
+          let mask = 0;
+          const affects = [
+            [r, c],
+            [r-1, c],
+            [r+1, c],
+            [r, c-1],
+            [r, c+1],
+          ];
+
+          for (const [ar, ac] of affects){
+            if (ar < 0 || ar >= SIZE || ac < 0 || ac >= SIZE) continue;
+            const varIndex = idx(ar, ac);
+            mask ^= (1 << varIndex);
+          }
+
+          const rhs = board[r][c] ? 1 : 0;
+          rows[eqIndex] = (mask | (rhs << N)) >>> 0;
+        }
+      }
+      return rows;
+    }
+
+    function solveLightsOut(){
+      let rows = buildAugmentedMatrix();
+      const pivColForRow = [];
+      let r = 0;
+
+      for (let col = 0; col < N && r < N; col++){
+        let pivot = -1;
+        for (let i = r; i < N; i++){
+          if (((rows[i] >>> col) & 1) === 1){
+            pivot = i; break;
+          }
+        }
+        if (pivot === -1) continue;
+
+        if (pivot !== r){
+          const tmp = rows[r];
+          rows[r] = rows[pivot];
+          rows[pivot] = tmp;
+        }
+
+        for (let i = 0; i < N; i++){
+          if (i === r) continue;
+          if (((rows[i] >>> col) & 1) === 1){
+            rows[i] = (rows[i] ^ rows[r]) >>> 0;
+          }
+        }
+
+        pivColForRow[r] = col;
+        r++;
+      }
+
+      // inconsistency: 0 = 1
+      for (let i = 0; i < N; i++){
+        const varsMask = rows[i] & ((1 << N) - 1);
+        const rhs = (rows[i] >>> N) & 1;
+        if (varsMask === 0 && rhs === 1) return null;
+      }
+
+      // one solution (free vars = 0)
+      const sol = new Array(N).fill(0);
+      for (let i = 0; i < r; i++){
+        const col = pivColForRow[i];
+        sol[col] = (rows[i] >>> N) & 1;
+      }
+      return sol;
+    }
+
+    function solutionToMoves(sol){
+      const moves = [];
+      for (let i = 0; i < N; i++){
+        if (sol[i] === 1) moves.push(i);
+      }
+      return moves; // indices
+    }
+
+    function runAutoSolve(){
+      if (isAutoSolving) return;
+
+      if (isAllOff()){
+        setMessage("すでに全消灯だよ。", "warn");
+        return;
+      }
+
+      const sol = solveLightsOut();
+      if (!sol){
+        setMessage("この盤面は解けないみたい…（シャッフルし直してね）", "warn");
+        return;
+      }
+
+      const movesIdx = solutionToMoves(sol);
+      if (movesIdx.length === 0){
+        setMessage("すでに解けているみたい。", "warn");
+        return;
+      }
+
+      // assist -> no high score
+      assistUsed = true;
+
+      // 自動解答中の見た目のため、タイマーがまだ未開始なら開始扱いにしない（表示は0.0のままでOK）
+      // すでに手動で始めていたなら動いているので、そのまま進行→クリア時にstopTimerされる
+
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      isAutoSolving = true;
+      autoToken++;
+      const myToken = autoToken;
+
+      clearHintHighlight();
+      setMessage("自動解答中…", "warn");
+      lockUI(true);
+
+      const moves = movesIdx.map(i => [Math.floor(i / SIZE), i % SIZE]);
+
+      const step = () => {
+        if (myToken !== autoToken) return;
+
+        if (moves.length === 0){
+          isAutoSolving = false;
+          lockUI(false);
+
+          if (!isAllOff()){
+            setMessage("自動解答が完了しました（未クリア）。シャッフルしてね。", "warn");
+          }
+          return;
+        }
+
+        const [r,c] = moves.shift();
+        applyMove(r, c, true, "auto");
+
+        if (reduceMotion){
+          while (moves.length > 0 && !isAllOff()){
+            const [rr,cc] = moves.shift();
+            applyMove(rr, cc, true, "auto");
+          }
+          setTimeout(step, 0);
+        } else {
+          setTimeout(step, 120);
+        }
+      };
+
+      step();
+    }
+
+    // --------- Hint (highlight one recommended move; does NOT auto-move) ----------
+    function showHint(){
+      if (isAutoSolving) return;
+
+      if (isAllOff()){
+        setMessage("すでに全消灯だよ。", "warn");
+        return;
+      }
+
+      const sol = solveLightsOut();
+      if (!sol){
+        setMessage("この盤面は解けないみたい…（シャッフルし直してね）", "warn");
+        return;
+      }
+
+      const movesIdx = solutionToMoves(sol);
+      if (movesIdx.length === 0){
+        setMessage("すでに解けているみたい。", "warn");
+        return;
+      }
+
+      // ヒントを使ったプレイはハイスコア記録しない
+      assistUsed = true;
+
+      const i = movesIdx[0];
+      const cell = gridEl.children[i];
+
+      clearHintHighlight();
+      lastHintIndex = i;
+      cell.classList.add("hint");
+      cell.focus({ preventScroll: true });
+
+      setMessage("ヒント：光っているマスを押してみて。", "warn");
+
+      hintTimeoutId = setTimeout(() => {
+        if (gridEl.children[lastHintIndex]){
+          gridEl.children[lastHintIndex].classList.remove("hint");
+        }
+        lastHintIndex = -1;
+        hintTimeoutId = 0;
+      }, 1500);
+    }
+
+    // --------- wiring ----------
+    newGameBtn.addEventListener("click", () => {
+      if (isAutoSolving) return;
+      randomizeBoard();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      if (isAutoSolving) return;
+      setAllOff();
+    });
+
+    autoSolveBtn.addEventListener("click", () => {
+      runAutoSolve();
+    });
+
+    hintBtn.addEventListener("click", () => {
+      showHint();
+    });
+
+    // init
     createGrid();
+    renderBestScores();
     randomizeBoard();
   </script>
 </body>
-  </html>
+</html>
