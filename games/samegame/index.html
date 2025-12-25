@@ -44,15 +44,16 @@
       justify-content: space-between;
       align-items: center;
       gap: 8px;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       font-size: 0.8rem;
     }
 
     .settings-row label {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       white-space: nowrap;
+      min-width: 0;
     }
 
     select {
@@ -63,6 +64,17 @@
       padding: 4px 6px;
       font-size: 0.8rem;
       outline: none;
+      box-sizing: border-box;
+    }
+
+    /* サイズ欄を小さめにして、色数欄がはみ出さないように */
+    #sizeSelect { width: 108px; }
+    #colorSelect { width: 152px; }
+
+    @media (max-width: 360px) {
+      .settings-row { flex-wrap: wrap; }
+      #sizeSelect, #colorSelect { width: 100%; }
+      .settings-row label { width: 100%; justify-content: space-between; }
     }
 
     .status-row {
@@ -70,26 +82,41 @@
       justify-content: space-between;
       align-items: center;
       font-size: 0.85rem;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       gap: 8px;
     }
 
-    .score-label span {
-      font-weight: 600;
-    }
+    .score-label span { font-weight: 600; }
 
     .high-score {
       font-size: 0.78rem;
       color: #c3c7d8;
+      white-space: nowrap;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: 100%;
     }
 
     .grid-wrapper {
       display: flex;
       justify-content: center;
-      margin: 6px 0 10px;
+      margin: 6px 0 8px;
     }
 
-    /* JSから列数だけ渡してレイアウトはCSS側に寄せる */
     .grid {
       --cols: 10;
       width: 100%;
@@ -102,36 +129,16 @@
       border-radius: 10px;
       box-shadow: inset 0 0 8px rgba(0,0,0,0.6);
       box-sizing: border-box;
-
-      /* スコア演出の配置基準 */
-      position: relative;
     }
 
     @keyframes popIn {
       from { transform: scale(0.92); opacity: 0; }
       to   { transform: scale(1); opacity: 1; }
     }
+
     /* 初回生成（ニューゲーム直後）だけ軽く出現アニメ */
     .grid.animate .cell:not(.empty) {
       animation: popIn 0.22s ease-out;
-    }
-
-    /* スコア加点のフロート表示 */
-    @keyframes floatUp {
-      from { transform: translate(-50%, -50%) translateY(0); opacity: 0; }
-      15%  { opacity: 1; }
-      to   { transform: translate(-50%, -50%) translateY(-18px); opacity: 0; }
-    }
-    .floating-score {
-      position: absolute;
-      z-index: 5;
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: rgba(255,255,255,0.9);
-      text-shadow: 0 2px 8px rgba(0,0,0,0.65);
-      pointer-events: none;
-      animation: floatUp 650ms ease-out forwards;
-      white-space: nowrap;
     }
 
     .cell {
@@ -142,11 +149,11 @@
       box-sizing: border-box;
       border: 1px solid rgba(0,0,0,0.4);
       box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.12s ease, filter 0.12s ease;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.12s ease, filter 0.08s ease;
       position: relative;
       overflow: hidden;
 
-      /* スマホの誤ズーム抑止 */
+      /* スマホ誤ズーム/ハイライト抑止 */
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
@@ -159,27 +166,6 @@
       background: #555;
     }
 
-    /* 色覚多様性：薄い記号表示（attrで注入） */
-    .cell[data-symbol] .cell-inner::after {
-      content: attr(data-symbol);
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      color: rgba(255,255,255,0.34);
-      font-weight: 800;
-      font-size: 0.95em;
-      letter-spacing: 0.02em;
-      pointer-events: none;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.35);
-    }
-
-    /* ヒント：消せる塊のハイライト */
-    .cell.hint {
-      filter: brightness(1.12) saturate(1.08);
-      box-shadow: 0 0 0 2px rgba(255,255,255,0.18), 0 4px 10px rgba(0,0,0,0.65);
-      transform: translateY(-1px);
-    }
-
     .cell:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.6);
@@ -190,6 +176,29 @@
       pointer-events: none;
       box-shadow: none;
       border: none;
+    }
+
+    /* 消せる塊の軽いハイライト */
+    .cell.hl:not(.empty) {
+      box-shadow:
+        0 0 0 2px rgba(255,255,255,0.35) inset,
+        0 3px 10px rgba(0,0,0,0.55);
+      filter: brightness(1.06);
+    }
+
+    /* 記号（色覚多様性対応） */
+    .symbol {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: 0.02em;
+      color: rgba(255,255,255,0.38);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+      pointer-events: none;
+      user-select: none;
     }
 
     /* カラーブロック（ライトっぽく立体感） */
@@ -221,7 +230,6 @@
       transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.15s;
       white-space: nowrap;
 
-      /* スマホの誤ズーム抑止 */
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
@@ -234,14 +242,19 @@
 
     button:disabled {
       opacity: 0.45;
-      cursor: default;
-      transform: none;
+      cursor: not-allowed;
       box-shadow: none;
     }
 
     .btn-secondary {
       background: #3a4255;
       color: #e0e3f0;
+      box-shadow: none;
+    }
+
+    .btn-warn {
+      background: #3a4255;
+      color: #ffb2b2;
       box-shadow: none;
     }
 
@@ -255,12 +268,29 @@
 
     .message.over {
       color: #ff9f6b;
-      font-weight: 600;
+      font-weight: 650;
     }
 
     .message.perfect {
       color: #7cffb1;
-      font-weight: 700;
+      font-weight: 750;
+    }
+
+    /* スコア内訳（直近の加点表示） */
+    .delta {
+      font-size: 0.82rem;
+      min-height: 1.1em;
+      text-align: center;
+      color: #e7eaff;
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none;
+      user-select: none;
+    }
+    .delta.show {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     .small-note {
@@ -268,6 +298,7 @@
       font-size: 0.75rem;
       text-align: right;
       color: #9ca3b8;
+      line-height: 1.35;
     }
   </style>
 </head>
@@ -300,12 +331,12 @@
       <div class="high-score">ハイスコア：<span id="highScore">0</span></div>
     </div>
 
-    <div class="status-row">
-      <div>手数：<span id="moves">0</span></div>
-      <div style="display:flex; gap:6px; align-items:center;">
+    <div class="btn-row">
+      <div class="btn-group">
         <button id="newGameBtn">ニューゲーム</button>
-        <button id="undoBtn" class="btn-secondary" disabled>1手戻す</button>
-        <button id="resetHighBtn" class="btn-secondary">ハイスコア消去</button>
+        <button id="undoBtn" class="btn-secondary" disabled>Undo</button>
+        <button id="redoBtn" class="btn-secondary" disabled>Redo</button>
+        <button id="resetHighBtn" class="btn-warn">この設定のハイスコア消去</button>
       </div>
     </div>
 
@@ -313,71 +344,172 @@
       <div id="grid" class="grid"></div>
     </div>
 
+    <div id="delta" class="delta"></div>
     <div id="message" class="message"></div>
-    <div class="small-note">※n個消しのスコア = n × n × 5</div>
+
+    <div class="small-note">
+      <div>※n個消しのスコア = n × n × 5</div>
+      <div id="perfectNote">※全消しボーナス = —</div>
+    </div>
   </div>
 
   <script>
     // ===== 定数 =====
     const SCORE_FACTOR = 5;
+    const PERFECT_FACTOR = 10;          // 全消しボーナス = (横×縦×PERFECT_FACTOR)
+    const INIT_TRY_LIMIT = 300;         // 初期盤面生成のリトライ上限
+    const HISTORY_LIMIT = 80;           // Undo/Redoの履歴上限
+    const LAST_SETTINGS_KEY = "samegameLastSettings_v2";
 
-    // 色覚多様性：色に加えて薄い記号（3～5色に対応）
-    const COLOR_SYMBOLS = ["●", "■", "▲", "★", "◆"];
+    // 色覚多様性：色ごとの記号（色数に応じて先頭から使う）
+    const SYMBOLS = ["●", "■", "▲", "★", "◆", "✦", "✚"];
 
-    // 前回「ニューゲームで開始した設定」を保存するキー
-    const LAST_SETTINGS_KEY = "samegameLastSettings_v1";
+    // ===== 設定（UI＝ゲーム反映は即時） =====
+    let COLS = 10;
+    let ROWS = 12;
+    let COLORS = 5;
 
-    // ===== ゲーム本体が使う設定（プレイ中に変わらない） =====
-    let GAME_COLS = 10;
-    let GAME_ROWS = 12;
-    let GAME_COLORS = 5;
-
-    // ===== UIで選択中の設定（プレビュー用） =====
-    let SEL_COLS = 10;
-    let SEL_ROWS = 12;
-    let SEL_COLORS = 5;
-
-    // ハイスコアキー（ゲーム用 / UI選択用）
-    let GAME_HIGH_KEY = "";
-    let SEL_HIGH_KEY = "";
+    // ===== ハイスコアキー =====
+    let HIGH_KEY = "";
 
     // ===== ゲーム状態 =====
     let board = [];
     let score = 0;
-    let moves = 0;
     let gameOver = false;
 
-    // 1手戻す用の履歴
-    /** @type {Array<{board:number[][], score:number, moves:number, gameOver:boolean, msgText:string, msgClass:string}>} */
-    const historyStack = [];
+    // Undo/Redo
+    let undoStack = [];
+    let redoStack = [];
 
-    // ヒント用（直近ハイライトしたセルを保持）
-    let lastHintCells = [];
-    let lastHintKey = "";
-
-    // 描画セル参照（高速に取りたいとき用）
-    const cellMap = new Map(); // key: "r,c" -> cellEl
+    // ハイライト管理
+    let highlighted = []; // [[r,c], ...]
+    let lastHoverCellKey = ""; // "r,c"
 
     // ===== DOM =====
     const gridEl = document.getElementById("grid");
     const scoreEl = document.getElementById("score");
-    const movesEl = document.getElementById("moves");
     const messageEl = document.getElementById("message");
+    const deltaEl = document.getElementById("delta");
     const highScoreEl = document.getElementById("highScore");
+    const perfectNoteEl = document.getElementById("perfectNote");
+
     const newGameBtn = document.getElementById("newGameBtn");
     const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
     const resetHighBtn = document.getElementById("resetHighBtn");
+
     const sizeSelect = document.getElementById("sizeSelect");
     const colorSelect = document.getElementById("colorSelect");
 
-    // ハイスコア用キー
+    // ===== ユーティリティ =====
     function getHighScoreKey(cols, rows, colors) {
       return `samegameHighScore_${cols}x${rows}_c${colors}`;
     }
 
-    // UI選択値を読む
+    function deepCopyBoard(b) {
+      return b.map(row => row.slice());
+    }
+
+    function setMessage(text, cls = "message") {
+      messageEl.textContent = text || "";
+      messageEl.className = cls;
+    }
+
+    let deltaTimer = null;
+    function showDelta(text) {
+      if (!text) return;
+      deltaEl.textContent = text;
+      deltaEl.classList.add("show");
+      if (deltaTimer) clearTimeout(deltaTimer);
+      deltaTimer = setTimeout(() => {
+        deltaEl.classList.remove("show");
+      }, 650);
+    }
+
+    function updatePerfectNote() {
+      const bonus = COLS * ROWS * PERFECT_FACTOR;
+      perfectNoteEl.textContent = `※全消しボーナス = ${COLS} × ${ROWS} × ${PERFECT_FACTOR} = ${bonus}`;
+    }
+
+    function loadHighScore() {
+      const raw = localStorage.getItem(HIGH_KEY);
+      const val = raw ? parseInt(raw, 10) : 0;
+      highScoreEl.textContent = isNaN(val) ? 0 : String(val);
+    }
+
+    function saveHighScoreIfNeeded() {
+      const raw = localStorage.getItem(HIGH_KEY);
+      const current = raw ? parseInt(raw, 10) : 0;
+      const hi = isNaN(current) ? 0 : current;
+
+      if (score > hi) {
+        localStorage.setItem(HIGH_KEY, String(score));
+        highScoreEl.textContent = String(score);
+      }
+    }
+
+    function updateUndoRedoButtons() {
+      undoBtn.disabled = undoStack.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function pushUndoState() {
+      const snapshot = {
+        board: deepCopyBoard(board),
+        score,
+        gameOver,
+        messageText: messageEl.textContent,
+        messageClass: messageEl.className
+      };
+      undoStack.push(snapshot);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack = [];
+      updateUndoRedoButtons();
+    }
+
+    function applySnapshot(snap) {
+      board = deepCopyBoard(snap.board);
+      score = snap.score;
+      gameOver = !!snap.gameOver;
+      messageEl.textContent = snap.messageText || "";
+      messageEl.className = snap.messageClass || "message";
+      clearHighlight();
+      updateStatus();
+      renderBoard();
+      updateUndoRedoButtons();
+    }
+
+    function undo() {
+      if (undoStack.length === 0) return;
+      const current = {
+        board: deepCopyBoard(board),
+        score,
+        gameOver,
+        messageText: messageEl.textContent,
+        messageClass: messageEl.className
+      };
+      redoStack.push(current);
+      const prev = undoStack.pop();
+      applySnapshot(prev);
+    }
+
+    function redo() {
+      if (redoStack.length === 0) return;
+      const current = {
+        board: deepCopyBoard(board),
+        score,
+        gameOver,
+        messageText: messageEl.textContent,
+        messageClass: messageEl.className
+      };
+      undoStack.push(current);
+      const next = redoStack.pop();
+      applySnapshot(next);
+    }
+
+    // ===== 設定保存／復元 =====
     function readSettingsFromUI() {
-      const sizeVal = sizeSelect.value; // "10x12" など
+      const sizeVal = sizeSelect.value;
       const [colsStr, rowsStr] = sizeVal.split("x");
       return {
         cols: parseInt(colsStr, 10),
@@ -388,7 +520,6 @@
       };
     }
 
-    // UIに設定を反映（存在するoptionのみ）
     function applySettingsToUI(sizeVal, colorVal) {
       if (typeof sizeVal === "string") {
         const ok = Array.from(sizeSelect.options).some(o => o.value === sizeVal);
@@ -400,8 +531,7 @@
       }
     }
 
-    // 前回遊んだ設定をUIに復元（ニューゲームで開始した設定）
-    function loadLastPlayedSettingsIntoUI() {
+    function loadLastSettingsIntoUI() {
       try {
         const raw = localStorage.getItem(LAST_SETTINGS_KEY);
         if (!raw) return;
@@ -409,150 +539,84 @@
         if (!obj || typeof obj !== "object") return;
         applySettingsToUI(obj.size, obj.colors);
       } catch (_) {
-        // 壊れたJSON等は無視
+        // ignore
       }
     }
 
-    // 前回遊んだ設定を保存（ニューゲームで開始したとき）
-    function saveLastPlayedSettingsFromUI() {
+    function saveLastSettingsFromUI() {
       const s = readSettingsFromUI();
       const payload = { size: s.sizeVal, colors: s.colorVal };
       localStorage.setItem(LAST_SETTINGS_KEY, JSON.stringify(payload));
     }
 
-    // UI選択中の設定に対するハイスコアを表示（ゲーム設定は変えない）
-    function updateHighScorePreviewFromUI() {
+    function applySettingsFromUI() {
       const s = readSettingsFromUI();
-      SEL_COLS = s.cols;
-      SEL_ROWS = s.rows;
-      SEL_COLORS = s.colors;
+      COLS = s.cols;
+      ROWS = s.rows;
+      COLORS = s.colors;
 
-      SEL_HIGH_KEY = getHighScoreKey(SEL_COLS, SEL_ROWS, SEL_COLORS);
+      HIGH_KEY = getHighScoreKey(COLS, ROWS, COLORS);
+      loadHighScore();
 
-      const raw = localStorage.getItem(SEL_HIGH_KEY);
-      const val = raw ? parseInt(raw, 10) : 0;
-      highScoreEl.textContent = isNaN(val) ? 0 : val;
-    }
-
-    // ゲーム設定を「選択中（SEL_）」に同期（ニューゲーム開始時だけ）
-    function applyGameSettingsFromSelection() {
-      GAME_COLS = SEL_COLS;
-      GAME_ROWS = SEL_ROWS;
-      GAME_COLORS = SEL_COLORS;
-
-      GAME_HIGH_KEY = SEL_HIGH_KEY;
-
-      // 列数だけCSS変数で渡す（サイズ計算はブラウザに任せる）
-      gridEl.style.setProperty("--cols", String(GAME_COLS));
-    }
-
-    // ハイスコア保存（ゲーム設定で保存）
-    function saveHighScoreIfNeeded() {
-      const raw = localStorage.getItem(GAME_HIGH_KEY);
-      const currentHigh = raw ? parseInt(raw, 10) : 0;
-      const hi = isNaN(currentHigh) ? 0 : currentHigh;
-
-      if (score > hi) {
-        localStorage.setItem(GAME_HIGH_KEY, String(score));
-      }
-
-      // 表示中の設定がゲームと同じ場合のみ、表示も更新
-      if (SEL_HIGH_KEY === GAME_HIGH_KEY) {
-        const shown = parseInt(highScoreEl.textContent, 10) || 0;
-        if (score > shown) highScoreEl.textContent = String(score);
-      }
-    }
-
-    // ===== Undo関連 =====
-    function deepCopyBoard(b) {
-      return b.map(row => row.slice());
-    }
-
-    function pushHistory() {
-      historyStack.push({
-        board: deepCopyBoard(board),
-        score,
-        moves,
-        gameOver,
-        msgText: messageEl.textContent || "",
-        msgClass: messageEl.className || "message"
-      });
-      updateUndoButton();
-    }
-
-    function updateUndoButton() {
-      undoBtn.disabled = historyStack.length === 0;
-    }
-
-    function undoOnce() {
-      if (historyStack.length === 0) return;
-      const prev = historyStack.pop();
-      board = deepCopyBoard(prev.board);
-      score = prev.score;
-      moves = prev.moves;
-      gameOver = prev.gameOver;
-      messageEl.textContent = prev.msgText;
-      messageEl.className = prev.msgClass;
-
-      clearHint();
-      updateStatus();
-      renderBoard();
-      updateUndoButton();
+      gridEl.style.setProperty("--cols", String(COLS));
+      updatePerfectNote();
     }
 
     // ===== 盤面生成 =====
     function initBoard() {
       score = 0;
-      moves = 0;
       gameOver = false;
-      messageEl.textContent = "";
-      messageEl.className = "message";
+      undoStack = [];
+      redoStack = [];
+      updateUndoRedoButtons();
+      clearHighlight();
+      setMessage("");
+      deltaEl.textContent = "";
+      deltaEl.classList.remove("show");
 
-      historyStack.length = 0;
-      updateUndoButton();
-      clearHint();
-
-      // 生成直後だけ軽くアニメ
       gridEl.classList.add("animate");
 
-      // triesを超えても生成できない“超エッジケース”のフォールバック
-      const MAX_TRIES = 300;
-      let ok = false;
-
-      for (let tries = 0; tries < MAX_TRIES; tries++) {
+      let generated = false;
+      for (let tries = 0; tries < INIT_TRY_LIMIT; tries++) {
         const b = [];
-        for (let r = 0; r < GAME_ROWS; r++) {
+        for (let r = 0; r < ROWS; r++) {
           const row = [];
-          for (let c = 0; c < GAME_COLS; c++) {
-            row.push(Math.floor(Math.random() * GAME_COLORS));
+          for (let c = 0; c < COLS; c++) {
+            row.push(Math.floor(Math.random() * COLORS));
           }
           b.push(row);
         }
         board = b;
-        if (hasAnyMove()) { ok = true; break; }
+        if (hasAnyMove()) {
+          generated = true;
+          break;
+        }
       }
 
       updateStatus();
       renderBoard();
+      saveHighScoreIfNeeded(); // 0でも整合のため（表示はそのまま）
 
-      // アニメ解除（短時間だけ）
       setTimeout(() => gridEl.classList.remove("animate"), 260);
 
-      if (!ok) {
-        // 生成失敗 → ゲームとして成立しないので停止＆案内
+      if (!generated) {
         gameOver = true;
-        messageEl.textContent = "盤面生成に失敗しました。ニューゲームを押して再試行してください。";
-        messageEl.className = "message over";
+        setMessage("初期盤面の生成に失敗しました。ニューゲームを押してください。", "message over");
       }
     }
 
-    // DOM描画（イベントはデリゲーションで1回だけ付ける）
+    function updateStatus() {
+      scoreEl.textContent = String(score);
+    }
+
+    // ===== 描画 =====
     function renderBoard() {
       gridEl.innerHTML = "";
-      cellMap.clear();
 
-      for (let r = 0; r < GAME_ROWS; r++) {
-        for (let c = 0; c < GAME_COLS; c++) {
+      const symList = SYMBOLS.slice(0, Math.max(1, COLORS));
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
           const cell = document.createElement("div");
           const inner = document.createElement("div");
           inner.className = "cell-inner";
@@ -560,15 +624,20 @@
 
           cell.classList.add("cell");
 
-          const colorIndex = board[r][c];
-          if (colorIndex === null) {
+          const v = board[r][c];
+          if (v === null) {
             cell.classList.add("empty");
           } else {
-            cell.classList.add(`color-${colorIndex}`);
+            cell.classList.add(`color-${v}`);
             cell.dataset.row = String(r);
             cell.dataset.col = String(c);
-            cell.dataset.symbol = COLOR_SYMBOLS[colorIndex] ?? "";
-            cellMap.set(`${r},${c}`, cell);
+
+            // 記号（色覚多様性）
+            const sym = symList[v] ?? symList[v % symList.length] ?? "●";
+            const symEl = document.createElement("div");
+            symEl.className = "symbol";
+            symEl.textContent = sym;
+            cell.appendChild(symEl);
           }
 
           gridEl.appendChild(cell);
@@ -576,19 +645,30 @@
       }
     }
 
-    // ===== ヒント（ホバー時にその塊を軽く強調）=====
-    function clearHint() {
-      for (const el of lastHintCells) el.classList.remove("hint");
-      lastHintCells = [];
-      lastHintKey = "";
+    // ===== ハイライト =====
+    function idxOf(r, c) {
+      return r * COLS + c;
     }
 
-    function applyHintForCell(r, c) {
-      const key = `${r},${c}`;
-      if (key === lastHintKey) return;
+    function clearHighlight() {
+      if (highlighted.length === 0) return;
+      for (const [r, c] of highlighted) {
+        const i = idxOf(r, c);
+        const el = gridEl.children[i];
+        if (el) el.classList.remove("hl");
+      }
+      highlighted = [];
+      lastHoverCellKey = "";
+    }
 
-      clearHint();
-      lastHintKey = key;
+    function highlightClusterAt(r, c) {
+      if (gameOver) return;
+
+      const key = `${r},${c}`;
+      if (key === lastHoverCellKey) return;
+      lastHoverCellKey = key;
+
+      clearHighlight();
 
       const color = board[r]?.[c];
       if (color === null || color === undefined) return;
@@ -596,39 +676,15 @@
       const cluster = getCluster(r, c, color);
       if (cluster.length < 2) return;
 
-      const hintEls = [];
+      highlighted = cluster;
       for (const [rr, cc] of cluster) {
-        const el = cellMap.get(`${rr},${cc}`);
-        if (el) {
-          el.classList.add("hint");
-          hintEls.push(el);
-        }
+        const i = idxOf(rr, cc);
+        const el = gridEl.children[i];
+        if (el) el.classList.add("hl");
       }
-      lastHintCells = hintEls;
     }
 
-    // ===== スコア加点のフロート表示 =====
-    function showFloatingScore(plus, anchorCellEl) {
-      if (!anchorCellEl) return;
-
-      const gridRect = gridEl.getBoundingClientRect();
-      const cellRect = anchorCellEl.getBoundingClientRect();
-
-      const x = (cellRect.left - gridRect.left) + cellRect.width / 2;
-      const y = (cellRect.top - gridRect.top) + cellRect.height / 2;
-
-      const span = document.createElement("div");
-      span.className = "floating-score";
-      span.textContent = `+${plus}`;
-
-      span.style.left = `${x}px`;
-      span.style.top  = `${y}px`;
-
-      gridEl.appendChild(span);
-      setTimeout(() => span.remove(), 700);
-    }
-
-    // ===== ゲーム操作 =====
+    // ===== ゲームロジック =====
     function onGridClick(e) {
       if (gameOver) return;
 
@@ -644,63 +700,57 @@
       if (color === null) return;
 
       const cluster = getCluster(r, c, color);
-      if (cluster.length < 2) return; // 1個だけは消せない
+      if (cluster.length < 2) return;
 
-      // ここでUndo用に1手前を保存
-      pushHistory();
+      // Undo保存
+      pushUndoState();
 
+      // スコア加算
       const n = cluster.length;
       const gained = n * n * SCORE_FACTOR;
       score += gained;
-      moves++;
 
-      // 加点演出（クリック地点に表示）
-      showFloatingScore(gained, cell);
-
-      // クラスタを消す
+      // 消す
       for (const [rr, cc] of cluster) {
         board[rr][cc] = null;
       }
 
-      clearHint();
       applyGravity();
       shiftColumnsLeft();
+
+      clearHighlight();
       updateStatus();
       renderBoard();
+
+      showDelta(`${n}個消し +${gained}`);
+      saveHighScoreIfNeeded();
       checkGameEnd();
     }
 
-    // ヒント（PC向け：ポインターが乗ったセルの塊を強調）
     function onGridPointerMove(e) {
-      // タッチ中心環境ではヒントが暴れやすいので、hoverできる端末のみ
-      if (!(window.matchMedia && window.matchMedia("(hover: hover)").matches)) return;
-
       const cell = e.target.closest(".cell");
-      if (!cell || !gridEl.contains(cell)) { clearHint(); return; }
-      if (cell.classList.contains("empty")) { clearHint(); return; }
+      if (!cell || !gridEl.contains(cell)) return;
+      if (cell.classList.contains("empty")) { clearHighlight(); return; }
 
       const r = parseInt(cell.dataset.row, 10);
       const c = parseInt(cell.dataset.col, 10);
-      if (!Number.isFinite(r) || !Number.isFinite(c)) { clearHint(); return; }
+      if (!Number.isFinite(r) || !Number.isFinite(c)) return;
 
-      applyHintForCell(r, c);
+      highlightClusterAt(r, c);
     }
 
     function onGridPointerLeave() {
-      clearHint();
+      clearHighlight();
     }
 
-    // 同色クラスター探索（4方向）
     function getCluster(sr, sc, color) {
-      const visited = Array.from({ length: GAME_ROWS }, () =>
-        Array(GAME_COLS).fill(false)
-      );
+      const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
       const stack = [[sr, sc]];
       const cluster = [];
 
       while (stack.length > 0) {
         const [r, c] = stack.pop();
-        if (r < 0 || r >= GAME_ROWS || c < 0 || c >= GAME_COLS) continue;
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
         if (visited[r][c]) continue;
         if (board[r][c] !== color) continue;
 
@@ -712,143 +762,16 @@
         stack.push([r, c - 1]);
         stack.push([r, c + 1]);
       }
-
       return cluster;
     }
 
-    // 下方向への重力
     function applyGravity() {
-      for (let c = 0; c < GAME_COLS; c++) {
-        const columnValues = [];
-        for (let r = GAME_ROWS - 1; r >= 0; r--) {
-          if (board[r][c] !== null) columnValues.push(board[r][c]);
+      for (let c = 0; c < COLS; c++) {
+        const col = [];
+        for (let r = ROWS - 1; r >= 0; r--) {
+          const v = board[r][c];
+          if (v !== null) col.push(v);
         }
         let idx = 0;
-        for (let r = GAME_ROWS - 1; r >= 0; r--) {
-          board[r][c] = (idx < columnValues.length) ? columnValues[idx++] : null;
-        }
-      }
-    }
-
-
-    // 空列を詰めて左寄せ
-    function shiftColumnsLeft() {
-      const nonEmptyCols = [];
-      for (let c = 0; c < GAME_COLS; c++) {
-        let isEmpty = true;
-        for (let r = 0; r < GAME_ROWS; r++) {
-          if (board[r][c] !== null) { isEmpty = false; break; }
-        }
-        if (!isEmpty) nonEmptyCols.push(c);
-      }
-
-      const newBoard = Array.from({ length: GAME_ROWS }, () =>
-        Array(GAME_COLS).fill(null)
-      );
-
-      for (let newC = 0; newC < nonEmptyCols.length; newC++) {
-        const oldC = nonEmptyCols[newC];
-        for (let r = 0; r < GAME_ROWS; r++) {
-          newBoard[r][newC] = board[r][oldC];
-        }
-      }
-      board = newBoard;
-    }
-
-    // まだ消せる塊があるかチェック
-    function hasAnyMove() {
-      for (let r = 0; r < GAME_ROWS; r++) {
-        for (let c = 0; c < GAME_COLS; c++) {
-          const color = board[r][c];
-          if (color === null) continue;
-          if (r > 0 && board[r - 1][c] === color) return true;
-          if (r < GAME_ROWS - 1 && board[r + 1][c] === color) return true;
-          if (c > 0 && board[r][c - 1] === color) return true;
-          if (c < GAME_COLS - 1 && board[r][c + 1] === color) return true;
-        }
-      }
-      return false;
-    }
-
-    // 全部消えたか
-    function isBoardEmpty() {
-      for (let r = 0; r < GAME_ROWS; r++) {
-        for (let c = 0; c < GAME_COLS; c++) {
-          if (board[r][c] !== null) return false;
-        }
-      }
-      return true;
-    }
-
-    function checkGameEnd() {
-      if (isBoardEmpty()) {
-        gameOver = true;
-
-        // パーフェクトボーナス（盤面サイズ比例）
-        const perfectBonus = GAME_COLS * GAME_ROWS * 10;
-        score += perfectBonus;
-        updateStatus();
-
-        messageEl.textContent = `パーフェクトクリア！ ボーナス +${perfectBonus}`;
-        messageEl.className = "message perfect";
-        saveHighScoreIfNeeded();
-        return;
-      }
-
-      if (!hasAnyMove()) {
-        gameOver = true;
-        messageEl.textContent = "これ以上消せません。ゲームオーバー。";
-        messageEl.className = "message over";
-        saveHighScoreIfNeeded();
-      }
-    }
-
-    function updateStatus() {
-      scoreEl.textContent = String(score);
-      movesEl.textContent = String(moves);
-    }
-
-    // ニューゲーム：選択中の設定をゲームに反映して開始
-    function startNewGame() {
-      updateHighScorePreviewFromUI();     // SEL_更新（表示も更新）
-      applyGameSettingsFromSelection();   // ゲーム設定へ同期
-      saveLastPlayedSettingsFromUI();     // 前回設定として保存
-      initBoard();
-    }
-
-    // ===== イベント =====
-    newGameBtn.addEventListener("click", startNewGame);
-
-    undoBtn.addEventListener("click", () => {
-      if (confirm("1手戻しますか？")) {
-        undoOnce();
-      }
-    });
-
-    resetHighBtn.addEventListener("click", () => {
-      if (confirm("今のサイズ＆色数のハイスコアをリセットしますか？")) {
-        localStorage.removeItem(SEL_HIGH_KEY);
-        updateHighScorePreviewFromUI();
-      }
-    });
-
-    // サイズ・色数変更：ハイスコア表示だけ切り替え（プレイ中でも安全）
-    sizeSelect.addEventListener("change", updateHighScorePreviewFromUI);
-    colorSelect.addEventListener("change", updateHighScorePreviewFromUI);
-
-    // グリッドクリック（イベントデリゲーション）
-    gridEl.addEventListener("click", onGridClick);
-
-    // ヒント（hoverできる端末のみ実質有効）
-    gridEl.addEventListener("pointermove", onGridPointerMove);
-    gridEl.addEventListener("pointerleave", onGridPointerLeave);
-
-    // ===== 初期化 =====
-    // 前回設定をUIに復元 → その設定で自動スタート
-    loadLastPlayedSettingsIntoUI();
-    updateHighScorePreviewFromUI();
-    applyGameSettingsFromSelection();
-    initBoard();
-  </script>
-</body>
-</html>
+        for (let r = ROWS - 1; r >= 0; r--) {
+          board[r][c] = (idx < col.leng
