@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>10秒チャレンジ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
       margin: 0;
@@ -13,25 +13,33 @@
       align-items: center;
       background: #e9eef8;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+      /* 追加: 連打時などのテキスト範囲選択を防いで没入感UP */
+      user-select: none;
+      -webkit-user-select: none;
     }
+
     .container {
       background: #fff;
       padding: 24px;
       border-radius: 16px;
       box-shadow: 0 8px 20px rgba(0,0,0,0.1);
       text-align: center;
-      width: 300px;
+      width: 320px;
     }
+
     h1 {
       margin: 0 0 16px;
       font-size: 1.2rem;
     }
+
     .time {
       font-size: 2rem;
       margin: 16px 0;
       min-height: 2.2rem;
       color: #333;
     }
+
     button {
       width: 100%;
       padding: 12px 0;
@@ -43,27 +51,64 @@
       transition: 0.1s;
       color: white;
       background: #4b6fff;
-      touch-action: manipulation; /* タップ時の余計な遅延を減らすヒント */
+      touch-action: manipulation; /* タップ時の余計な遅延を減らす */
     }
-    button:active {
-      transform: translateY(1px);
+
+    button:active { transform: translateY(1px); }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
+
     .result {
       margin-top: 12px;
       font-size: 1rem;
       min-height: 1.2rem;
     }
+
     .hiscore {
       margin-top: 10px;
       font-size: 0.95rem;
       color: #444;
       background: #f4f7ff;
       border-radius: 10px;
-      padding: 10px 12px;
+      padding: 12px 12px;
       text-align: left;
       line-height: 1.35;
+
+      /* 追加: ランキングはコピーできる方が親切 */
+      user-select: text;
+      -webkit-user-select: text;
     }
+
     .hiscore b { color: #2a46c6; }
+
+    .rankhead {
+      margin-top: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #2a46c6;
+    }
+
+    .ranklist {
+      margin: 6px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    .rankitem { margin: 6px 0; }
+
+    .mono {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .sep {
+      margin: 10px 0;
+      height: 1px;
+      background: rgba(0,0,0,0.08);
+    }
   </style>
 </head>
 <body>
@@ -73,12 +118,12 @@
 
   <div id="time" class="time">　</div>
 
-  <button id="mainBtn">スタート</button>
+  <button id="mainBtn" type="button">スタート</button>
 
   <div id="result" class="result"></div>
 
   <div id="hiscore" class="hiscore"></div>
-  <button id="resetBtn" style="background:#8892a6;">ハイスコアをリセット</button>
+  <button id="resetBtn" type="button" style="background:#8892a6;">ランキングをリセット</button>
 </div>
 
 <script>
@@ -91,24 +136,16 @@
   const hiscoreDisplay = document.getElementById('hiscore');
   const resetBtn = document.getElementById('resetBtn');
 
-  // ---- ハイスコア（最小誤差）保存キー ----
-  const HS_KEY = "tenSecChallenge_highscore_v1";
+  // ---- ランキング保存キー（上位10件）----
+  const RANK_KEY = "tenSecChallenge_rankings_v2";
+  const MAX_RANK = 10;
 
-  function loadHighScore() {
-    try {
-      const raw = localStorage.getItem(HS_KEY);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (typeof obj?.bestDiff !== "number" || typeof obj?.bestElapsed !== "number") return null;
-      if (typeof obj?.updatedAt !== "number") obj.updatedAt = Date.now();
-      return obj;
-    } catch {
-      return null;
-    }
-  }
+  // ---- 二重発火防止（pointerdown→click など）----
+  let lastActionAt = 0;
+  const ACTION_GUARD_MS = 350;
 
-  function saveHighScore(hs) {
-    localStorage.setItem(HS_KEY, JSON.stringify(hs));
+  function nowMs() {
+    return performance.now();
   }
 
   function formatDate(ts) {
@@ -121,52 +158,108 @@
     return `${y}/${m}/${day} ${hh}:${mm}`;
   }
 
-  function renderHighScore(hs) {
-    if (!hs) {
-      hiscoreDisplay.innerHTML = `ハイスコア：<b>未登録</b><br>（誤差が一番小さい記録が保存されます）`;
+  function safeNumber(n) {
+    return (typeof n === "number" && Number.isFinite(n)) ? n : null;
+  }
+
+  function loadRankings() {
+    try {
+      const raw = localStorage.getItem(RANK_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+
+      const cleaned = arr.map(x => ({
+        elapsed: safeNumber(x?.elapsed),
+        diff: safeNumber(x?.diff),
+        ts: safeNumber(x?.ts)
+      })).filter(r => r.elapsed !== null && r.diff !== null && r.ts !== null);
+
+      return cleaned.slice(0, 200); // 念のため
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRankings(ranks) {
+    localStorage.setItem(RANK_KEY, JSON.stringify(ranks));
+  }
+
+  // diff 小さいほど上位。完全同点なら elapsed 小さい方を上位（好みで変更OK）。
+  function compareRecord(a, b) {
+    if (a.diff !== b.diff) return a.diff - b.diff;
+    if (a.elapsed !== b.elapsed) return a.elapsed - b.elapsed;
+    return a.ts - b.ts;
+  }
+
+  function renderRankings(ranks) {
+    const sorted = [...ranks].sort(compareRecord).slice(0, MAX_RANK);
+    const best = sorted.length ? sorted[0] : null;
+
+    let html = "";
+
+    if (!best) {
+      html += `ハイスコア：<b>未登録</b><br>（誤差が一番小さい記録が上位になります）`;
+      html += `<div class="sep"></div>`;
+      html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
+      html += `まだ記録がありません。`;
+      hiscoreDisplay.innerHTML = html;
       return;
     }
-    hiscoreDisplay.innerHTML =
-      `ハイスコア：誤差 <b>${hs.bestDiff.toFixed(3)} 秒</b><br>` +
-      `記録：${hs.bestElapsed.toFixed(3)} 秒<br>` +
-      `更新：${formatDate(hs.updatedAt)}`;
+
+    html += `ハイスコア：誤差 <b class="mono">${best.diff.toFixed(3)} 秒</b><br>`;
+    html += `記録：<span class="mono">${best.elapsed.toFixed(3)} 秒</span><br>`;
+    html += `更新：${formatDate(best.ts)}`;
+
+    html += `<div class="sep"></div>`;
+    html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
+    html += `<ol class="ranklist">`;
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i];
+      html += `<li class="rankitem">誤差 <b class="mono">${r.diff.toFixed(3)} 秒</b> / `;
+      html += `記録 <span class="mono">${r.elapsed.toFixed(3)} 秒</span><br>`;
+      html += `<span style="color:#666;">${formatDate(r.ts)}</span></li>`;
+    }
+    html += `</ol>`;
+
+    hiscoreDisplay.innerHTML = html;
   }
 
   // 初期表示
-  let highScore = loadHighScore();
-  renderHighScore(highScore);
+  let rankings = loadRankings();
+  renderRankings(rankings);
 
-  function isNewRecord(diff, elapsed, hs) {
-    if (!hs) return true;
-    // diff が小さいほど良い。完全同点なら、elapsedが10に近いのは同じなので
-    // ここでは「より早い更新（elapsedが小さい方）」を優先（好みで変えてOK）
-    if (diff < hs.bestDiff - 1e-9) return true;
-    if (Math.abs(diff - hs.bestDiff) <= 1e-9 && elapsed < hs.bestElapsed - 1e-9) return true;
+  function setRunningUI(running) {
+    isRunning = running;
+
+    if (running) {
+      mainBtn.textContent = "ストップ";
+      mainBtn.style.background = "#ff6b6b";
+      resetBtn.disabled = true; // 計測中はリセット禁止
+    } else {
+      mainBtn.textContent = "スタート";
+      mainBtn.style.background = "#4b6fff";
+      resetBtn.disabled = false;
+    }
+  }
+
+  function shouldGuardAction() {
+    const t = nowMs();
+    if (t - lastActionAt < ACTION_GUARD_MS) return true;
+    lastActionAt = t;
     return false;
   }
 
-  function handlePress(event) {
-    // 長押しなどで複数イベントが入らないよう一応制御
-    if (event.pointerType === 'mouse' || event.pointerType === 'touch' || event.pointerType === 'pen') {
-      event.preventDefault();
-    }
+  function handleStart() {
+    startTime = nowMs();
+    resultDisplay.textContent = "";
+    timeDisplay.textContent = "計測中…";
+    setRunningUI(true);
+  }
 
-    // --- 計測開始 ---
-    if (!isRunning) {
-      startTime = performance.now();
-      isRunning = true;
-
-      resultDisplay.textContent = "";
-      timeDisplay.textContent = "計測中…";
-
-      mainBtn.textContent = "ストップ";
-      mainBtn.style.background = "#ff6b6b";
-      return;
-    }
-
-    // --- 計測停止 ---
-    const end = performance.now();
-    isRunning = false;
+  function handleStop() {
+    const end = nowMs();
+    setRunningUI(false);
 
     const elapsed = (end - startTime) / 1000;
     const diff = Math.abs(elapsed - 10);
@@ -174,34 +267,80 @@
     timeDisplay.textContent = elapsed.toFixed(3) + " 秒";
     resultDisplay.textContent = `誤差：${diff.toFixed(3)} 秒`;
 
-    // --- ハイスコア判定 ---
-    if (isNewRecord(diff, elapsed, highScore)) {
-      highScore = {
-        bestDiff: diff,
-        bestElapsed: elapsed,
-        updatedAt: Date.now()
-      };
-      saveHighScore(highScore);
-      renderHighScore(highScore);
-      resultDisplay.textContent += "（🎉 新記録）";
-    }
+    const beforeTop10 = [...rankings].sort(compareRecord).slice(0, MAX_RANK);
 
-    mainBtn.textContent = "スタート";
-    mainBtn.style.background = "#4b6fff";
+    const newRec = { elapsed, diff, ts: Date.now() };
+    const merged = [...rankings, newRec].sort(compareRecord).slice(0, MAX_RANK);
+
+    const entered = JSON.stringify(beforeTop10) !== JSON.stringify(merged);
+
+    if (entered) {
+      rankings = merged;
+      saveRankings(rankings);
+      renderRankings(rankings);
+      resultDisplay.textContent += "（🎉 ランキング入り）";
+    } else {
+      resultDisplay.textContent += "（ランキング外）";
+    }
   }
 
-  // クリックではなく pointerdown を利用してラグを減らす
-  mainBtn.addEventListener('pointerdown', handlePress);
+  function triggerAction(srcEvent) {
+    if (srcEvent) {
+      // preventDefault は touch/pen のみに限定（mouse は基本触らない）
+      if (srcEvent.type === "pointerdown") {
+        if (srcEvent.pointerType === "touch" || srcEvent.pointerType === "pen") {
+          srcEvent.preventDefault();
+        }
+      } else if (srcEvent.type === "keydown") {
+        // キーボードはスクロール等を止めたいので preventDefault
+        srcEvent.preventDefault();
+      }
+    }
 
-  // ハイスコアリセット
-  resetBtn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    localStorage.removeItem(HS_KEY);
-    highScore = null;
-    renderHighScore(highScore);
-    resultDisplay.textContent = "ハイスコアをリセットしました";
-  });
+    if (shouldGuardAction()) return;
+
+    if (!isRunning) handleStart();
+    else handleStop();
+  }
+
+  // pointerdown（体感ラグ低減）
+  mainBtn.addEventListener('pointerdown', (e) => triggerAction(e));
+
+  // click（キーボードEnter/Space救済 + 環境差フォールバック）
+  mainBtn.addEventListener('click', (e) => triggerAction(e));
+
+  // ★修正: キーボード操作の競合を回避（操作可能要素にフォーカスがある時はグローバルショートカットしない）
+  document.addEventListener('keydown', (e) => {
+    const k = e.key;
+    if (!(k === "Enter" || k === " " || k === "Spacebar")) return;
+
+    // フォーカスが「ボタン/リンク/入力」等の操作要素にある場合は、その要素本来の挙動に任せる
+    const t = e.target;
+    if (t && typeof t.closest === "function") {
+      const interactive = t.closest('button, a, input, textarea, select, summary, [role="button"], [contenteditable="true"]');
+      if (interactive) return;
+    }
+
+    // それ以外（背景等にフォーカス）ならゲーム開始/停止のショートカットとして使う
+    triggerAction(e);
+  }, { passive: false });
+
+  // ランキングリセット（pointerdown + click）
+  function resetRanking(e) {
+    if (e && e.type === "pointerdown") {
+      if (e.pointerType === "touch" || e.pointerType === "pen") e.preventDefault();
+    }
+    if (isRunning) return;
+
+    localStorage.removeItem(RANK_KEY);
+    rankings = [];
+    renderRankings(rankings);
+    resultDisplay.textContent = "ランキングをリセットしました";
+  }
+
+  resetBtn.addEventListener('pointerdown', resetRanking);
+  resetBtn.addEventListener('click', resetRanking);
 </script>
 
 </body>
-    </html>
+</html>
