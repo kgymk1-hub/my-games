@@ -2,1613 +2,1752 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>アイシテルニイガタパズル</title>
   <style>
     :root{
       --bg:#f4f4f4;
-      --wood:#8b5a2b;
-      --wood2:#dcb386;
-      --accent:#d32f2f;
+      --panel:#ffffff;
       --text:#333;
+      --muted:#777;
+
+      --wood-frame:#8b5a2b;
+      --wood-light:#dcb386;
+      --wood-block:#e8c39e;
+
+      --accent:#d32f2f;
+      --ok:#2e7d32;
+
+      --shadow:0 6px 16px rgba(0,0,0,.10);
+      --radius:16px;
+
+      --cell:86px;           /* JS側でも使う */
+      --gap:6px;             /* ブロック間の見た目隙間 */
+      --inner-pad:10px;      /* 盤面内側の枠余白 */
+      --frame-thick:10px;    /* 外枠太さ */
     }
-    *{box-sizing:border-box}
+
     body{
+      margin:0;
       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
-      margin:0; padding:14px 0 28px;
       background:var(--bg);
       color:var(--text);
-      display:flex; flex-direction:column; align-items:center;
-      min-height:100vh;
-      user-select:none;
-      -webkit-tap-highlight-color:transparent;
-      touch-action:manipulation;
-      overflow-x:hidden;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    h1{margin:0 0 10px; font-size:22px; color:#444}
+    .wrap{
+      max-width:720px;
+      margin:0 auto;
+      padding:14px 14px 28px;
+    }
 
-    /* sound */
-    .sound-wrap{
-      width:92%; max-width:380px;
-      background:#fff;
-      border:1px solid #ddd;
-      border-radius:12px;
-      padding:10px 12px;
-      box-shadow:0 2px 10px rgba(0,0,0,.06);
-      margin:0 0 10px;
-    }
-    .sound-row{
-      display:flex; align-items:center; gap:10px;
-      margin:6px 0;
-    }
-    .sound-btn{
-      flex:0 0 auto;
-      background:#fff; border:1px solid #aaa; border-radius:18px;
-      padding:6px 12px; font-size:12px; color:#777;
-      display:flex; align-items:center; gap:6px;
-      cursor:pointer;
-      transition:.15s;
-      white-space:nowrap;
-    }
-    .sound-btn.active{
-      background:var(--accent); border-color:var(--accent);
-      color:#fff; font-weight:800;
-    }
-    .sound-slider{
-      flex:1 1 auto;
-      display:flex; align-items:center; gap:8px;
-      min-width:0;
-    }
-    input[type="range"]{ width:100%; }
-    .sound-val{
-      flex:0 0 auto;
-      width:30px;
-      text-align:right;
+    h1{
+      margin:10px 0 12px;
+      font-size:28px;
+      letter-spacing:.02em;
+      text-align:center;
+      color:#444;
       font-weight:800;
-      color:#666;
-      font-size:12px;
     }
 
-    /* mode */
-    .mode-selector{
-      display:flex; width:90%; max-width:360px;
-      background:#ddd; border-radius:8px; padding:4px;
-      margin-bottom:10px;
+    .panel{
+      background:var(--panel);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px;
+      margin:12px 0;
+    }
+
+    /* ====== Sound Panel ====== */
+    .sound-row{
+      display:grid;
+      grid-template-columns: 140px 1fr 34px;
+      gap:10px;
+      align-items:center;
+      margin:10px 0;
+    }
+    .toggle{
+      border:none;
+      border-radius:999px;
+      padding:10px 12px;
+      font-weight:800;
+      cursor:pointer;
+      box-shadow:0 3px 10px rgba(0,0,0,.08);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+    }
+    .toggle.off{
+      background:#f0f0f0;
+      color:#666;
+    }
+    .toggle.on{
+      background:var(--accent);
+      color:#fff;
+    }
+    .toggle.bgm.on{
+      background:#e9eef6;
+      color:#2a4a7a;
+      box-shadow:0 3px 10px rgba(0,0,0,.06);
+      border:1px solid rgba(42,74,122,.15);
+    }
+
+    input[type="range"]{
+      width:100%;
+      accent-color:#1e88e5;
+    }
+    .vol-num{
+      font-weight:800;
+      color:#444;
+      text-align:right;
+      width:34px;
+    }
+
+    /* ====== Mode Buttons ====== */
+    .modes{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:8px;
     }
     .mode-btn{
-      flex:1; border:none; background:transparent; cursor:pointer;
-      padding:10px 0; border-radius:6px;
-      font-size:14px; font-weight:900; color:#666;
-      transition:.15s;
-      white-space:nowrap;
+      border:none;
+      border-radius:12px;
+      padding:12px 10px;
+      font-weight:900;
+      font-size:18px;
+      cursor:pointer;
+      box-shadow:0 4px 14px rgba(0,0,0,.10);
+      background:#eaeaea;
+      color:#555;
+      user-select:none;
     }
     .mode-btn.active{
-      background:#fff; color:var(--accent);
-      box-shadow:0 2px 4px rgba(0,0,0,.10);
+      background:#fff;
+      color:var(--accent);
+      outline:2px solid rgba(211,47,47,.25);
     }
 
-    /* score */
-    #score-board{
-      display:flex; justify-content:space-between;
-      width:88%; max-width:360px;
-      font-weight:800; font-size:15px; color:#555;
-      margin-bottom:6px;
-      z-index:50;
+    /* ====== Score Row ====== */
+    .score-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:10px;
+      padding:8px 4px 2px;
+      font-weight:900;
     }
-    .score-item span{color:var(--accent); font-size:18px; margin-left:5px}
+    .score-row .big{
+      font-size:28px;
+      color:var(--accent);
+    }
+    .score-row .min{
+      font-size:24px;
+      color:var(--accent);
+    }
+    .score-row .label{
+      font-size:18px;
+      color:#444;
+      font-weight:900;
+    }
 
-    /* board wrapper */
-    #board-wrapper{
+    /* ====== Board Area ====== */
+    .board-area{
       position:relative;
-      margin:18px auto 18px;
-      display:block;
+      width:100%;
+      margin-top:8px;
+      /* height は JS で確定 */
     }
-    #board-container{
+    .board-scale{
       position:absolute;
       left:50%;
       top:0;
-      width:388px;          /* = 360 + padding(20) + border(8) */
-      height:328px;         /* = 300 + padding(20) + border(8) */
-      padding:10px;
-      border:4px solid var(--wood);
-      border-radius:8px;
-      background:var(--wood2);
-      box-shadow:0 6px 18px rgba(0,0,0,.22);
-      transform-origin:top center;
       transform:translateX(-50%) scale(1);
+      transform-origin: top center;
+      will-change: transform;
     }
-    #goal-marker{
-      position:absolute;
-      top:-28px; left:10px;
-      width:calc(100% - 20px);
-      text-align:left;
-      font-size:14px;
-      font-weight:900;
-      color:var(--wood);
-      white-space:nowrap;
-      pointer-events:none;
-    }
-    #game-board{
+
+    .board-frame{
       position:relative;
-      width:360px; height:300px;
-      border:2px solid var(--wood);
-      overflow:hidden;
-      background-color:#111;
-      background-image:
-        linear-gradient(45deg,#222 25%,transparent 25%),
-        linear-gradient(-45deg,#222 25%,transparent 25%),
-        linear-gradient(45deg,transparent 75%,#222 75%),
-        linear-gradient(-45deg,transparent 75%,#222 75%);
-      background-size:20px 20px;
-    }
-
-    /* blocks */
-    .block{
-      position:absolute;
-      border:2px solid var(--wood);
-      border-radius:4px;
-      box-shadow:inset 0 0 6px rgba(0,0,0,.10);
-      display:flex; align-items:center; justify-content:center;
-      cursor:pointer;
-      transition:top .10s ease-out, left .10s ease-out;
-      z-index:10;
-      line-height:1.05;
-      white-space:nowrap;
-      word-break:keep-all;
-      padding:0 4px;
-    }
-    .block.selected{
-      background:#fff3e0 !important;
-      border-color:var(--accent);
-      box-shadow:0 0 0 2px rgba(211,47,47,.35);
-      z-index:20;
-    }
-    .block.auto{
-      outline:2px solid rgba(0,137,123,.55);
-      z-index:25;
-    }
-
-    .vertical{
-      writing-mode:vertical-rl;
-      text-orientation:upright;
-      letter-spacing:1px;
-    }
-    .horizontal{
-      writing-mode:horizontal-tb;
-      text-orientation:mixed;
-      letter-spacing:0;
-    }
-
-    .block-id{
-      position:absolute; top:1px; left:2px;
-      font-size:9px; opacity:.55;
-      writing-mode:horizontal-tb;
-      pointer-events:none;
-      font-weight:800;
-    }
-    .label{
-      font-weight:1000;
-      display:block;
-      pointer-events:none;
-      white-space:nowrap; /* いわき含め全員1行固定 */
-    }
-
-    /* arrows */
-    .arrow-btn{
-      position:absolute;
-      width:40px; height:40px;
-      background:var(--accent);
-      color:#fff;
-      border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      font-size:20px;
-      box-shadow:0 2px 6px rgba(0,0,0,.3);
-      opacity:.96;
-      z-index:30;
-      cursor:pointer;
+      background:var(--wood-frame);
+      border-radius:14px;
+      padding:var(--frame-thick);
+      box-shadow:0 10px 20px rgba(0,0,0,.16);
       user-select:none;
     }
-    .arrow-btn:active{transform:scale(.9); background:#b71c1c}
-    .arrow-top{ top:-16px; left:50%; margin-left:-20px; }
-    .arrow-bottom{ bottom:-16px; left:50%; margin-left:-20px; }
-    .arrow-left{ left:-16px; top:50%; margin-top:-20px; }
-    .arrow-right{ right:-16px; top:50%; margin-top:-20px; }
 
-    /* controls */
-    .primary-controls{
-      display:flex; gap:15px; width:92%; max-width:380px;
-      margin-bottom:10px;
-    }
-    .history-btn{
-      flex:1; height:54px;
-      font-size:18px; font-weight:900;
+    .board-inner{
+      position:relative;
+      background:var(--wood-light);
       border-radius:12px;
-      background:#fff;
-      border:2px solid #888;
-      box-shadow:0 4px 0 #bbb;
-      cursor:pointer;
-      display:flex; align-items:center; justify-content:center;
-      transition:.08s;
-    }
-    .history-btn:active{transform:translateY(4px); box-shadow:none}
-    .history-btn:disabled{
-      background:#eee; border-color:#ccc; color:#aaa;
-      box-shadow:none; transform:none; cursor:not-allowed;
+      padding:var(--inner-pad);
     }
 
-    .solver-area{
-      width:92%; max-width:380px;
-      margin-bottom:auto;
+    .grid-bg{
+      position:absolute;
+      inset:var(--inner-pad);
+      border-radius:10px;
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.18), rgba(255,255,255,.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) calc(var(--cell))),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.18), rgba(255,255,255,.18) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) calc(var(--cell)));
+      pointer-events:none;
+      opacity:.25;
     }
-    .solve-btn{
-      width:100%;
-      padding:14px 12px;
-      font-size:16px; font-weight:1000;
-      border:none; border-radius:10px;
-      background:#4caf50; color:#fff;
-      box-shadow:0 4px 0 #388e3c;
-      cursor:pointer; transition:.08s;
-    }
-    .solve-btn:active{transform:translateY(4px); box-shadow:none}
-    .solve-btn.solving{background:#ef5350; box-shadow:0 4px 0 #c62828}
 
-    .danger-zone{
-      margin-top:26px;
-      width:100%;
-      padding:15px 0 18px;
-      border-top:1px solid #ddd;
-      background:#eaeaea;
-      display:flex; flex-direction:column; align-items:center; gap:10px;
+    .cells-bg{
+      position:absolute;
+      inset:var(--inner-pad);
+      border-radius:10px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.20), transparent 55%),
+        radial-gradient(circle at 80% 70%, rgba(0,0,0,.08), transparent 50%),
+        repeating-linear-gradient(45deg, rgba(0,0,0,.10) 0 12px, rgba(0,0,0,.14) 12px 24px);
+      pointer-events:none;
+      opacity:.26;
     }
-    .danger-desc{font-size:11px; color:#777}
-    .secondary-btn-group{display:flex; gap:16px}
-    .secondary-btn{
-      background:#fff;
-      border:1px solid #999;
-      color:#555;
-      padding:8px 18px;
-      font-size:13px;
-      border-radius:20px;
-      cursor:pointer;
-    }
-    .secondary-btn:active{background:#ddd}
 
-    /* overlay */
-    #loading-overlay{
-      display:none;
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.62);
-      z-index:100;
-      color:#fff;
+    .goal-badge{
+      position:absolute;
+      left:var(--inner-pad);
+      top:var(--inner-pad);
+      width:calc(var(--cell) * 2);
+      height:calc(var(--cell) * 2);
+      border-radius:10px;
+      display:flex;
       align-items:center;
       justify-content:center;
-      flex-direction:column;
-      text-align:center;
-      padding:18px;
+      font-weight:1000;
+      color:#fff;
+      background:linear-gradient(135deg, rgba(211,47,47,.92), rgba(211,47,47,.60));
+      text-shadow:0 2px 6px rgba(0,0,0,.25);
+      pointer-events:none;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.25);
+      opacity:.95;
     }
-    .spinner{
-      width:40px; height:40px;
-      border:4px solid #fff; border-top:4px solid transparent;
-      border-radius:50%;
-      animation:spin 1s linear infinite;
-      margin-bottom:14px;
-    }
-    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-    .overlay-sub{font-size:12px; margin-top:8px; opacity:.92; line-height:1.35}
 
-    /* confetti canvas */
-    #confetti{
+    .block{
+      position:absolute;
+      border-radius:10px;
+      box-shadow: 0 8px 14px rgba(0,0,0,.18);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:1000;
+      letter-spacing:.04em;
+      touch-action:none;
+      cursor:grab;
+      overflow:hidden;
+      user-select:none;
+      transform: translate3d(0,0,0);
+    }
+
+    .block:active{ cursor:grabbing; }
+
+    .block .id{
+      position:absolute;
+      left:8px;
+      top:6px;
+      font-size:14px;
+      opacity:.55;
+      font-weight:900;
+      text-shadow:none;
+      pointer-events:none;
+    }
+
+    .block .name{
+      padding:6px 8px;
+      line-height:1.05;
+      text-align:center;
+      white-space:nowrap; /* 基本は折り返し禁止 */
+    }
+
+    /* 1x1等で縦にしたい場合 */
+    .vtext{
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      letter-spacing: 0;
+      white-space:normal;
+      line-height:1.00;
+    }
+
+    /* ====== Controls ====== */
+    .controls{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:12px;
+      margin-top:12px;
+    }
+    .btn{
+      border:none;
+      border-radius:14px;
+      padding:14px 10px;
+      font-weight:1000;
+      font-size:18px;
+      cursor:pointer;
+      box-shadow:0 4px 14px rgba(0,0,0,.12);
+      background:#e9e9e9;
+      color:#666;
+      user-select:none;
+    }
+    .btn:disabled{
+      opacity:.45;
+      cursor:not-allowed;
+    }
+    .btn.primary{
+      grid-column: 1 / -1;
+      background:var(--ok);
+      color:#fff;
+      font-size:20px;
+      padding:16px 10px;
+    }
+
+    .sub-controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+      margin-top:10px;
+    }
+    .pill{
+      border:none;
+      border-radius:999px;
+      padding:10px 14px;
+      font-weight:900;
+      cursor:pointer;
+      background:#f0f0f0;
+      box-shadow:0 3px 10px rgba(0,0,0,.08);
+      user-select:none;
+    }
+
+    /* ====== Solver Overlay ====== */
+    .overlay{
       position:fixed;
       inset:0;
-      width:100vw;
-      height:100vh;
-      pointer-events:none;
-      z-index:200;
+      background:rgba(0,0,0,.35);
       display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:999;
+      padding:16px;
+    }
+    .overlay .card{
+      width:min(520px, 100%);
+      background:#fff;
+      border-radius:18px;
+      box-shadow:0 20px 40px rgba(0,0,0,.25);
+      padding:16px 16px 14px;
+    }
+    .overlay .title{
+      font-weight:1000;
+      font-size:18px;
+      margin-bottom:6px;
+    }
+    .overlay .info{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:13px;
+      color:#333;
+      background:#f6f6f6;
+      border-radius:12px;
+      padding:10px;
+      white-space:pre-wrap;
+      min-height:56px;
+    }
+    .overlay .cancel{
+      margin-top:10px;
+      width:100%;
+      border:none;
+      border-radius:14px;
+      padding:12px 10px;
+      font-weight:1000;
+      cursor:pointer;
+      background:#efefef;
+    }
+
+    /* confetti canvas */
+    #confettiCanvas{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:998;
+      display:none;
+    }
+
+    .foot{
+      margin-top:12px;
+      text-align:center;
+      color:var(--muted);
+      font-weight:800;
+      font-size:14px;
     }
   </style>
 </head>
 <body>
-  <h1>アイシテルニイガタパズル</h1>
+  <canvas id="confettiCanvas"></canvas>
 
-  <div class="sound-wrap">
-    <div class="sound-row">
-      <button id="btn-bgm" class="sound-btn" onclick="toggleBGM()"><span>♪</span> BGM: OFF</button>
-      <div class="sound-slider">
-        <input id="bgm-vol" type="range" min="0" max="10" step="1" value="5" oninput="setBgmVol(this.value)">
-        <div class="sound-val" id="bgm-val">5</div>
+  <div class="wrap">
+    <h1>アイシテルニイガタパズル</h1>
+
+    <div class="panel" id="soundPanel">
+      <div class="sound-row">
+        <button class="toggle bgm off" id="bgmToggle">♪ BGM: OFF</button>
+        <input type="range" id="bgmVol" min="0" max="10" step="1" value="5" />
+        <div class="vol-num" id="bgmVolNum">5</div>
+      </div>
+      <div class="sound-row">
+        <button class="toggle on" id="seToggle">📣 効果音: ON</button>
+        <input type="range" id="seVol" min="0" max="10" step="1" value="5" />
+        <div class="vol-num" id="seVolNum">5</div>
+      </div>
+
+      <div class="modes">
+        <button class="mode-btn active" id="modePromote">目指せ!J1昇格</button>
+        <button class="mode-btn" id="modeChamp">目指せ!J1優勝</button>
+      </div>
+
+      <div class="score-row">
+        <div>
+          <span class="label">手数:</span>
+          <span class="big" id="movesCount">0</span>
+        </div>
+        <div>
+          <span class="label">最少:</span>
+          <span class="min" id="minMoves">-</span>
+        </div>
       </div>
     </div>
-    <div class="sound-row">
-      <button id="btn-se" class="sound-btn active" onclick="toggleSE()"><span>🔊</span> 効果音: ON</button>
-      <div class="sound-slider">
-        <input id="se-vol" type="range" min="0" max="10" step="1" value="5" oninput="setSeVol(this.value)">
-        <div class="sound-val" id="se-val">5</div>
+
+    <div class="panel">
+      <div style="display:flex; align-items:center; gap:8px; font-weight:1000;">
+        <span id="modeLabel">▼ 目指せ!J1昇格 ▼</span>
       </div>
+
+      <div class="board-area" id="boardArea">
+        <div class="board-scale" id="boardScale">
+          <div class="board-frame" id="boardFrame">
+            <div class="board-inner" id="boardInner">
+              <div class="cells-bg"></div>
+              <div class="grid-bg"></div>
+              <div class="goal-badge" id="goalBadge">目指せ!J1昇格</div>
+              <!-- blocks inserted here -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="undoBtn" disabled>↩ 戻る</button>
+        <button class="btn" id="redoBtn" disabled>進む ↪</button>
+        <button class="btn primary" id="solveBtn">模範解答を計算（自動再生）</button>
+      </div>
+
+      <div class="sub-controls">
+        <button class="pill" id="resetBtn">最初に戻す</button>
+        <button class="pill" id="clearBestBtn">記録消去</button>
+      </div>
+
+      <div class="foot">設定・リセット（誤操作防止エリア）</div>
     </div>
   </div>
 
-  <div class="mode-selector">
-    <button id="btn-up" class="mode-btn active" onclick="switchMode('up')">目指せ!J1昇格</button>
-    <button id="btn-champ" class="mode-btn" onclick="switchMode('champ')">目指せ!J1優勝</button>
-  </div>
-
-  <div id="score-board">
-    <div class="score-item">手数: <span id="current-moves">0</span></div>
-    <div class="score-item">最少: <span id="best-score">-</span></div>
-  </div>
-
-  <div id="board-wrapper">
-    <div id="board-container">
-      <div id="goal-marker">▼ 目指せ!J1昇格 ▼</div>
-      <div id="game-board"></div>
+  <div class="overlay" id="solverOverlay">
+    <div class="card">
+      <div class="title">模範解答を計算中…</div>
+      <div class="info" id="solverInfo">初期化中…</div>
+      <button class="cancel" id="solverCancel">中止</button>
     </div>
   </div>
-
-  <div class="primary-controls">
-    <button id="btn-undo" class="history-btn" onclick="undoMove()" disabled>↩ 戻る</button>
-    <button id="btn-redo" class="history-btn" onclick="redoMove()" disabled>進む ↪</button>
-  </div>
-
-  <div class="solver-area">
-    <button id="btn-solve" class="solve-btn" onclick="toggleSolver()">模範解答を計算 (自動再生)</button>
-  </div>
-
-  <div class="danger-zone">
-    <span class="danger-desc">設定・リセット（誤操作防止エリア）</span>
-    <div class="secondary-btn-group">
-      <button class="secondary-btn" onclick="resetGame()">最初に戻す</button>
-      <button class="secondary-btn" onclick="clearBestScore()">記録消去</button>
-    </div>
-  </div>
-
-  <div id="loading-overlay">
-    <div class="spinner"></div>
-    <div style="font-weight:1000; font-size:16px;">解を探索中...</div>
-    <div class="overlay-sub" id="overlay-sub">
-      ※端末によっては数秒かかる場合があります<br>
-      （探索中は画面を閉じないでください）
-    </div>
-  </div>
-
-  <canvas id="confetti"></canvas>
 
 <script>
-/* =========================================================
-   TEAM COLORS (approx primary colors)
-   ========================================================= */
-const TEAM_COLORS = {
-  "新潟":"#ff7a00",
+(() => {
+  /* =========================================================
+   *  基本定数
+   * ========================================================= */
+  const COLS = 6;
+  const ROWS = 5;
 
-  // Mode1 (J1昇格)
-  "横浜FC":"#58b9e6",
-  "湘南":"#007a3d",
-  "徳島":"#0046a1",
-  "磐田":"#7bc6ff",
-  "大宮":"#ff6a00",
-  "仙台":"#f2b400",
-  "鳥栖":"#e4007f",
-  "いわき":"#d50000",
-  "山形":"#003e9c",
-  "今治":"#003a70",
-  "札幌":"#b0001a",
-  "甲府":"#0033a0",
-  "秋田":"#0b3d91",
-  "藤枝":"#6a1b9a",
+  const LS = {
+    mode: "ai_nigata_mode",
+    bestPromote: "ai_nigata_best_promote",
+    bestChamp: "ai_nigata_best_champ",
+    minPromote: "ai_nigata_min_promote",
+    minChamp: "ai_nigata_min_champ",
+    bgmOn: "ai_nigata_bgm_on",
+    seOn: "ai_nigata_se_on",
+    bgmVol: "ai_nigata_bgm_vol",
+    seVol: "ai_nigata_se_vol"
+  };
 
-  // Mode2 (J1優勝)
-  "鹿島":"#b50018",
-  "柏":"#ffd000",
-  "京都":"#5b2c83",
-  "広島":"#6a1b9a",
-  "神戸":"#7a0019",
-  "町田":"#0047ab",
-  "浦和":"#d40000",
-  "川崎":"#00a3e0",
-  "G大阪":"#0056a6",
-  "C大阪":"#ff2aa1",
-  "F東京":"#005bac",
-  "福岡":"#008b4a",
-  "岡山":"#7a0019"
-};
+  /* =========================================================
+   *  チームカラー（ざっくり：視認性優先）
+   * ========================================================= */
+  const TEAM_COLOR = {
+    // Mode1 (J1昇格)
+    "横浜FC": { bg:"#61b9e6", fg:"#062a4d" },
+    "湘南":   { bg:"#0b6b3b", fg:"#ffffff" },
+    "徳島":   { bg:"#0b4f9f", fg:"#ffffff" },
+    "磐田":   { bg:"#a6d8ff", fg:"#11324d" },
+    "大宮":   { bg:"#ff7a1a", fg:"#ffffff" },
+    "仙台":   { bg:"#f4b000", fg:"#1a1a1a" },
+    "鳥栖":   { bg:"#e91e63", fg:"#ffffff" },
+    "いわき": { bg:"#d00000", fg:"#ffffff" },
+    "山形":   { bg:"#0a4fb7", fg:"#ffffff" },
+    "今治":   { bg:"#0b3d91", fg:"#ffffff" },
+    "札幌":   { bg:"#c8102e", fg:"#ffffff" },
+    "甲府":   { bg:"#0b4aa2", fg:"#ffffff" },
+    "秋田":   { bg:"#114e9e", fg:"#ffffff" },
+    "藤枝":   { bg:"#6b38b1", fg:"#ffffff" },
 
-function pickTextColor(bgHex){
-  if(!bgHex || bgHex[0] !== '#' || bgHex.length !== 7) return "#111";
-  const r = parseInt(bgHex.slice(1,3),16);
-  const g = parseInt(bgHex.slice(3,5),16);
-  const b = parseInt(bgHex.slice(5,7),16);
-  const lum = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
-  return lum < 0.55 ? "#fff" : "#111";
-}
+    // Mode2 (J1優勝)
+    "鹿島":   { bg:"#a5001d", fg:"#ffffff" },
+    "柏":     { bg:"#f2c300", fg:"#1a1a1a" },
+    "京都":   { bg:"#4b2a7a", fg:"#ffffff" },
+    "広島":   { bg:"#5a2ca0", fg:"#ffffff" },
+    "神戸":   { bg:"#7a0c2e", fg:"#ffffff" },
+    "町田":   { bg:"#0b5da8", fg:"#ffffff" },
+    "浦和":   { bg:"#d60016", fg:"#ffffff" },
+    "川崎":   { bg:"#00a0e9", fg:"#062a4d" },
+    "G大阪":  { bg:"#0033a0", fg:"#ffffff" },
+    "C大阪":  { bg:"#e6007e", fg:"#ffffff" },
+    "F東京":  { bg:"#003a70", fg:"#ffffff" },
+    "福岡":   { bg:"#007a5e", fg:"#ffffff" },
+    "岡山":   { bg:"#8b0f1a", fg:"#ffffff" },
 
-/* =========================================================
-   SOUND (WebAudio) - 10 steps, louder max, pop 8bit loop16
-   ========================================================= */
-const Sound = {
-  ctx:null,
-  master:null,
-  bgmBus:null,
-  seBus:null,
+    // main
+    "新潟":   { bg:"#f39c12", fg:"#1a1a1a" }
+  };
 
-  bgmEnabled:false,
-  seEnabled:true,
-
-  bgmVol:5,
-  seVol:5,
-
-  isBgmPlaying:false,
-  nextStepTime:0,
-  stepIndex:0,
-  timer:null,
-  currentModeKey:'up',
-
-  init(){
-    if(!this.ctx){
-      const AC = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AC();
-
-      this.master = this.ctx.createGain();
-      this.bgmBus  = this.ctx.createGain();
-      this.seBus   = this.ctx.createGain();
-
-      this.bgmBus.connect(this.master);
-      this.seBus.connect(this.master);
-      this.master.connect(this.ctx.destination);
-    }
-    if(this.ctx.state === 'suspended') this.ctx.resume();
-    this.applyVolumes();
-  },
-
-  applyVolumes(){
-    // ★未初期化で落ちないガード（リロード直後の盤面未表示の根本原因を修正）
-    if(!this.bgmBus || !this.seBus) return;
-
-    const bgmGain = (this.bgmVol/10) * 0.35;
-    const seGain  = (this.seVol/10)  * 1.10;
-
-    this.bgmBus.gain.value = this.bgmEnabled ? bgmGain : 0;
-    this.seBus.gain.value  = this.seEnabled  ? seGain  : 0;
-  },
-
-  playMove(){
-    if(!this.seEnabled || this.seVol === 0) return;
-    this.init();
-    const t = this.ctx.currentTime;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(440, t);
-    osc.frequency.exponentialRampToValueAtTime(220, t + 0.06);
-
-    gain.gain.setValueAtTime(0.0, t);
-    gain.gain.linearRampToValueAtTime(0.18, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-
-    osc.connect(gain);
-    gain.connect(this.seBus);
-
-    osc.start(t);
-    osc.stop(t + 0.10);
-  },
-
-  playWin(){
-    if(!this.seEnabled || this.seVol === 0) return;
-    this.init();
-    const base = this.ctx.currentTime;
-    const freqs = [523.25, 659.25, 783.99, 1046.50];
-    freqs.forEach((f, i)=>{
-      const t = base + i*0.11;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = f;
-
-      gain.gain.setValueAtTime(0.0, t);
-      gain.gain.linearRampToValueAtTime(0.22, t+0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, t+0.65);
-
-      osc.connect(gain);
-      gain.connect(this.seBus);
-
-      osc.start(t);
-      osc.stop(t+0.75);
-    });
-  },
-
-  startBGM(){
-    if(!this.bgmEnabled || this.bgmVol === 0) return;
-    this.init();
-    if(this.isBgmPlaying) return;
-    this.isBgmPlaying = true;
-    this.stepIndex = 0;
-    this.nextStepTime = this.ctx.currentTime + 0.10;
-    this._schedule();
-  },
-
-  stopBGM(){
-    this.isBgmPlaying = false;
-    if(this.timer) clearTimeout(this.timer);
-    this.timer = null;
-  },
-
-  _schedule(){
-    if(!this.isBgmPlaying) return;
-
-    while(this.nextStepTime < this.ctx.currentTime + 0.50){
-      this._playStep(this.nextStepTime, this.stepIndex);
-      this.stepIndex = (this.stepIndex + 1) % 16;
-      this.nextStepTime += 0.125;
-    }
-
-    this.timer = setTimeout(()=>this._schedule(), 60);
-  },
-
-  _noteFreq(semi){
-    return 440 * Math.pow(2, semi/12);
-  },
-
-  _playStep(time, step){
-    const seqUp = [
-      0,  7,  9,  7,
-      0,  7, 12,  0,
-      0,  4,  7,  4,
-      0,  2,  4,  0
-    ];
-    const seqChamp = [
-      0,  7,  9, 12,
-      0, 12, 14, 12,
-      0,  7,  9,  7,
-      0,  4,  7,  0
-    ];
-
-    const seq = (this.currentModeKey === 'champ') ? seqChamp : seqUp;
-    const deg = seq[step];
-    if(deg === 0) return;
-
-    const base = 3; // C5
-    const semi = base + deg;
-
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-
-    osc.type = 'square';
-    osc.frequency.value = this._noteFreq(semi);
-
-    filter.type = 'lowpass';
-    filter.frequency.value = 1400;
-
-    gain.gain.setValueAtTime(0.0, time);
-    gain.gain.linearRampToValueAtTime(0.30, time + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.10);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.bgmBus);
-
-    osc.start(time);
-    osc.stop(time + 0.12);
-  }
-};
-
-function loadSoundSettings(){
-  const bgm = localStorage.getItem('aishiteru_bgm');
-  const se  = localStorage.getItem('aishiteru_se');
-  const bgmVol = localStorage.getItem('aishiteru_bgm_vol');
-  const seVol  = localStorage.getItem('aishiteru_se_vol');
-
-  Sound.bgmEnabled = (bgm === 'on');
-  Sound.seEnabled  = (se !== 'off');
-  Sound.bgmVol = bgmVol ? Math.max(0, Math.min(10, parseInt(bgmVol,10))) : 5;
-  Sound.seVol  = seVol  ? Math.max(0, Math.min(10, parseInt(seVol,10)))  : 5;
-
-  document.getElementById('bgm-vol').value = String(Sound.bgmVol);
-  document.getElementById('se-vol').value  = String(Sound.seVol);
-  document.getElementById('bgm-val').textContent = String(Sound.bgmVol);
-  document.getElementById('se-val').textContent  = String(Sound.seVol);
-
-  updateSoundUI();
-}
-
-function updateSoundUI(){
-  const btnBGM = document.getElementById('btn-bgm');
-  const btnSE  = document.getElementById('btn-se');
-
-  if(Sound.bgmEnabled && Sound.bgmVol > 0){
-    btnBGM.classList.add('active');
-    btnBGM.innerHTML = '<span>♪</span> BGM: ON';
-  }else{
-    btnBGM.classList.remove('active');
-    btnBGM.innerHTML = '<span>♪</span> BGM: OFF';
+  function getTeamColor(name){
+    return TEAM_COLOR[name] || { bg:"#999", fg:"#fff" };
   }
 
-  if(Sound.seEnabled && Sound.seVol > 0){
-    btnSE.classList.add('active');
-    btnSE.innerHTML = '<span>🔊</span> 効果音: ON';
-  }else{
-    btnSE.classList.remove('active');
-    btnSE.innerHTML = '<span>🔈</span> 効果音: OFF';
-  }
+  /* =========================================================
+   *  盤面データ（※仕様：盤面6x5、空き2、メイン2x2、ゴール左上固定）
+   * ========================================================= */
 
-  // 未初期化でも落ちない（applyVolumesにガードあり）
-  Sound.applyVolumes();
-}
+  // MODE1: 2x1 * 5, 1x2 * 5, 1x1 * 4, main 2x2（合計15ピース）
+  // （ユーザー要望の並びに近い配置／空き2マス）
+  const PROMOTE_LAYOUT = [
+    // id, name, w,h,x,y, isMain
+    { id:99, name:"新潟", w:2, h:2, x:4, y:3, isMain:true },
 
-function toggleBGM(){
-  Sound.init();
-  Sound.bgmEnabled = !Sound.bgmEnabled;
-  localStorage.setItem('aishiteru_bgm', Sound.bgmEnabled ? 'on' : 'off');
-  Sound.applyVolumes();
-  if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM(); else Sound.stopBGM();
-  updateSoundUI();
-}
-
-function toggleSE(){
-  Sound.init();
-  Sound.seEnabled = !Sound.seEnabled;
-  localStorage.setItem('aishiteru_se', Sound.seEnabled ? 'on' : 'off');
-  Sound.applyVolumes();
-  if(Sound.seEnabled && Sound.seVol>0) Sound.playMove();
-  updateSoundUI();
-}
-
-function setBgmVol(v){
-  Sound.bgmVol = Math.max(0, Math.min(10, parseInt(v,10)));
-  localStorage.setItem('aishiteru_bgm_vol', String(Sound.bgmVol));
-  document.getElementById('bgm-val').textContent = String(Sound.bgmVol);
-
-  // iOS対策：スライダー操作自体はユーザー操作なので init してOK
-  Sound.init();
-  Sound.applyVolumes();
-  if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM(); else Sound.stopBGM();
-  updateSoundUI();
-}
-
-function setSeVol(v){
-  Sound.seVol = Math.max(0, Math.min(10, parseInt(v,10)));
-  localStorage.setItem('aishiteru_se_vol', String(Sound.seVol));
-  document.getElementById('se-val').textContent = String(Sound.seVol);
-
-  Sound.init();
-  Sound.applyVolumes();
-  updateSoundUI();
-}
-
-/* =========================================================
-   GAME
-   ========================================================= */
-const COLS=6, ROWS=5, UNIT=60;
-
-const MODES = {
-  up:   { label:'目指せ!J1昇格',  storageBest:'aishiteru_best_up'   },
-  champ:{ label:'目指せ!J1優勝',  storageBest:'aishiteru_best_champ'}
-};
-
-/* -------------------------
-   Layouts (NO overlap)
-   - Board: 6x5
-   - Empty: 2
-   - Main: 2x2 at (4,3)
-   - Mode1: 1x1 x4, 2x1 x5, 1x2 x5
-   - Mode2: 1x1 x2, 2x1 x7, 1x2 x4
-   ------------------------- */
-const layout = {
-  // Mode1: J1昇格（以前の配置を維持）
-  up: [
-    { id: 7,  name:"横浜FC", w:2, h:1, x:0, y:0, isMain:false },
-    { id: 6,  name:"徳島",   w:2, h:1, x:2, y:0, isMain:false },
-    { id: 3,  name:"鳥栖",   w:1, h:2, x:4, y:0, isMain:false },
-    { id: 4,  name:"今治",   w:1, h:2, x:5, y:0, isMain:false },
-    { id: 1,  name:"湘南",   w:1, h:2, x:0, y:1, isMain:false },
-    { id: 2,  name:"磐田",   w:1, h:2, x:1, y:1, isMain:false },
-    { id: 5,  name:"大宮",   w:1, h:2, x:2, y:1, isMain:false },
-    { id: 15, name:"いわき", w:1, h:1, x:3, y:1, isMain:false },
-    { id: 12, name:"札幌",   w:1, h:1, x:3, y:2, isMain:false },
-    { id: 9,  name:"仙台",   w:2, h:1, x:0, y:3, isMain:false },
-    { id: 8,  name:"甲府",   w:2, h:1, x:2, y:3, isMain:false },
-    { id: 10, name:"山形",   w:2, h:1, x:0, y:4, isMain:false },
-    { id: 13, name:"秋田",   w:1, h:1, x:2, y:4, isMain:false },
-    { id: 14, name:"藤枝",   w:1, h:1, x:3, y:4, isMain:false },
-    { id: 99, name:"新潟",   w:2, h:2, x:4, y:3, isMain:true  }
-  ],
-
-  // Mode2: J1優勝（重なりゼロで作り直し・固定配置）
-  // 条件: 1x1=2, 2x1=7, 1x2=4, main=2x2, empty=2, mainは右下(4,3)固定
-  champ: [
-    // 2x1 (7 pieces)
-    { id: 201, name:"鹿島", w:2, h:1, x:0, y:0, isMain:false }, // dist 0
-    { id: 202, name:"広島", w:2, h:1, x:2, y:0, isMain:false }, // dist 2
-    { id: 203, name:"G大阪", w:2, h:1, x:4, y:0, isMain:false }, // dist 4
-    { id: 204, name:"神戸", w:2, h:1, x:2, y:1, isMain:false }, // dist 3
-    { id: 205, name:"F東京", w:2, h:1, x:4, y:1, isMain:false }, // dist 5
-    { id: 206, name:"C大阪", w:2, h:1, x:2, y:3, isMain:false }, // dist 5
-    { id: 207, name:"岡山", w:2, h:1, x:2, y:4, isMain:false }, // dist 6
-
-    // 1x2 (4 pieces)
-    { id: 211, name:"柏",   w:1, h:2, x:0, y:1, isMain:false }, // dist 1
-    { id: 212, name:"京都", w:1, h:2, x:1, y:1, isMain:false }, // dist 2
-    { id: 213, name:"町田", w:1, h:2, x:0, y:3, isMain:false }, // dist 3
-    { id: 214, name:"浦和", w:1, h:2, x:1, y:3, isMain:false }, // dist 4
-
-    // 1x1 (2 pieces)
-    { id: 221, name:"川崎", w:1, h:1, x:2, y:2, isMain:false }, // dist 4
-    { id: 222, name:"福岡", w:1, h:1, x:3, y:2, isMain:false }, // dist 5
-
-    // main 2x2 at (4,3)
-    { id: 99,  name:"新潟", w:2, h:2, x:4, y:3, isMain:true  }
-    // 空きマス2つ： (4,2) と (5,2)
-  ]
-};
-
-const el = {
-  board: document.getElementById('game-board'),
-  moves: document.getElementById('current-moves'),
-  best:  document.getElementById('best-score'),
-  btnUp:  document.getElementById('btn-up'),
-  btnCh:  document.getElementById('btn-champ'),
-  undo:  document.getElementById('btn-undo'),
-  redo:  document.getElementById('btn-redo'),
-  solve: document.getElementById('btn-solve'),
-  overlay: document.getElementById('loading-overlay'),
-  overlaySub: document.getElementById('overlay-sub'),
-  goal: document.getElementById('goal-marker'),
-  wrap: document.getElementById('board-wrapper'),
-  container: document.getElementById('board-container'),
-  confetti: document.getElementById('confetti')
-};
-
-let mode = 'up';
-let blocks = [];
-let moveCount = 0;
-let selected = -1;
-
-let undoStack = [];
-let redoStack = [];
-
-let isAuto = false;
-let autoMoves = [];
-let autoTimer = null;
-
-let solverWorker = null;
-let solverCancelToken = 0;
-
-function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
-
-function fitBoard(){
-  const container = el.container;
-  const wrapper = el.wrap;
-
-  const baseW = container.offsetWidth;
-  const extraTop = 32;
-  const baseH = container.offsetHeight + extraTop;
-
-  const screenW = Math.max(280, window.innerWidth - 24);
-  const screenH = Math.max(300, window.innerHeight * 0.56);
-
-  let scale = screenW / baseW;
-  if(baseH * scale > screenH) scale = screenH / baseH;
-  if(scale > 1.35) scale = 1.35;
-
-  container.style.transform = `translateX(-50%) scale(${scale})`;
-
-  wrapper.style.width  = `${baseW * scale}px`;
-  wrapper.style.height = `${baseH * scale}px`;
-}
-window.addEventListener('load', fitBoard);
-window.addEventListener('resize', fitBoard);
-
-function getBestKey(){ return MODES[mode].storageBest; }
-
-function loadBest(){
-  const v = localStorage.getItem(getBestKey());
-  el.best.textContent = v ? v : '-';
-}
-function saveBest(score){
-  const key = getBestKey();
-  const cur = localStorage.getItem(key);
-  if(!cur || score < parseInt(cur,10)){
-    localStorage.setItem(key, String(score));
-    el.best.textContent = String(score);
-  }
-}
-
-function clearBestScore(){
-  if(confirm('現在のモードの記録を消去しますか？')){
-    localStorage.removeItem(getBestKey());
-    el.best.textContent = '-';
-  }
-}
-
-function setModeUI(){
-  if(mode === 'up'){
-    el.btnUp.classList.add('active'); el.btnCh.classList.remove('active');
-  }else{
-    el.btnUp.classList.remove('active'); el.btnCh.classList.add('active');
-  }
-  const label = MODES[mode].label;
-  el.goal.textContent = `▼ ${label} ▼`;
-
-  Sound.currentModeKey = mode;
-  if(Sound.bgmEnabled && Sound.bgmVol>0){
-    Sound.stopBGM();
-    Sound.startBGM();
-  }
-}
-
-function switchMode(next){
-  stopAuto();
-  cancelSolver();
-  mode = next;
-  setModeUI();
-  loadBest();
-  resetGame();
-}
-
-function resetGame(){
-  stopAuto();
-  cancelSolver();
-
-  blocks = deepCopy(layout[mode]);
-  moveCount = 0;
-  selected = -1;
-  undoStack = [];
-  redoStack = [];
-  updateHud();
-  render();
-}
-
-function updateHud(){
-  el.moves.textContent = String(moveCount);
-  el.undo.disabled = (undoStack.length === 0) || isAuto;
-  el.redo.disabled = (redoStack.length === 0) || isAuto;
-}
-
-function canMove(block, dx, dy){
-  const nx = block.x + dx;
-  const ny = block.y + dy;
-  if(nx < 0 || nx + block.w > COLS) return false;
-  if(ny < 0 || ny + block.h > ROWS) return false;
-
-  for(const o of blocks){
-    if(o === block) continue;
-    if(nx < o.x + o.w && nx + block.w > o.x &&
-       ny < o.y + o.h && ny + block.h > o.y){
-      return false;
-    }
-  }
-  return true;
-}
-
-function getValidMovesFor(index){
-  const b = blocks[index];
-  const dirs = [
-    {dx:0, dy:-1, cls:'arrow-top',    ch:'&#9650;', dir:0},
-    {dx:0, dy: 1, cls:'arrow-bottom', ch:'&#9660;', dir:1},
-    {dx:-1,dy: 0, cls:'arrow-left',   ch:'&#9664;', dir:2},
-    {dx: 1,dy: 0, cls:'arrow-right',  ch:'&#9654;', dir:3}
+    { id:7,  name:"横浜FC", w:2, h:1, x:0, y:0 },
+    { id:1,  name:"湘南",   w:1, h:2, x:0, y:1 },
+    { id:6,  name:"徳島",   w:2, h:1, x:2, y:0 },
+    { id:2,  name:"磐田",   w:1, h:2, x:1, y:1 },
+    { id:5,  name:"大宮",   w:1, h:2, x:2, y:1 },
+    { id:9,  name:"仙台",   w:2, h:1, x:0, y:3 },
+    { id:3,  name:"鳥栖",   w:1, h:2, x:4, y:0 },
+    { id:15, name:"いわき", w:1, h:1, x:3, y:1 },
+    { id:10, name:"山形",   w:2, h:1, x:0, y:4 },
+    { id:4,  name:"今治",   w:1, h:2, x:5, y:0 },
+    { id:13, name:"札幌",   w:1, h:1, x:3, y:2 },
+    { id:8,  name:"甲府",   w:2, h:1, x:2, y:3 },
+    { id:14, name:"秋田",   w:1, h:1, x:2, y:4 },
+    { id:12, name:"藤枝",   w:1, h:1, x:3, y:4 },
   ];
-  return dirs.filter(d => canMove(b, d.dx, d.dy));
-}
 
-function applyMove(idx, dx, dy){
-  blocks[idx].x += dx;
-  blocks[idx].y += dy;
-}
-
-function doMove(idx, dx, dy, {record=true, sound=true}={}){
-  if(sound) Sound.playMove();
-  applyMove(idx, dx, dy);
-  moveCount++;
-  if(record){
-    undoStack.push({index:idx, dx, dy});
-    redoStack = [];
-  }
-  selected = -1;
-  updateHud();
-  render();
-  setTimeout(checkWin, 80);
-}
-
-function undoMove(){
-  if(undoStack.length === 0 || isAuto) return;
-  Sound.playMove();
-  const m = undoStack.pop();
-  applyMove(m.index, -m.dx, -m.dy);
-  redoStack.push(m);
-  moveCount--;
-  selected = -1;
-  updateHud();
-  render();
-}
-
-function redoMove(){
-  if(redoStack.length === 0 || isAuto) return;
-  Sound.playMove();
-  const m = redoStack.pop();
-  applyMove(m.index, m.dx, m.dy);
-  undoStack.push(m);
-  moveCount++;
-  selected = -1;
-  updateHud();
-  render();
-  setTimeout(checkWin, 80);
-}
-
-/* =========================================================
-   CONFETTI
-   ========================================================= */
-let confettiAnim = null;
-function startConfetti(durationMs=2200){
-  const canvas = el.confetti;
-  const ctx = canvas.getContext('2d');
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-
-  function resize(){
-    canvas.width = Math.floor(window.innerWidth * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
-    canvas.style.width = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  resize();
-  window.addEventListener('resize', resize, {passive:true});
-
-  const colors = ["#ff7a00","#58b9e6","#007a3d","#ffd000","#ff2aa1","#6a1b9a","#ffffff"];
-  const pieces = [];
-  const n = 140;
-
-  for(let i=0;i<n;i++){
-    pieces.push({
-      x: Math.random()*window.innerWidth,
-      y: -20 - Math.random()*window.innerHeight*0.4,
-      vx: (Math.random()-0.5)*3.2,
-      vy: 2.2 + Math.random()*4.2,
-      w: 6 + Math.random()*6,
-      h: 8 + Math.random()*10,
-      rot: Math.random()*Math.PI,
-      vr: (Math.random()-0.5)*0.25,
-      color: colors[Math.floor(Math.random()*colors.length)],
-      alpha: 0.85 + Math.random()*0.15
-    });
-  }
-
-  canvas.style.display = 'block';
-  const t0 = performance.now();
-
-  function tick(now){
-    const t = now - t0;
-    ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
-
-    pieces.forEach(p=>{
-      p.x += p.vx;
-      p.y += p.vy;
-      p.rot += p.vr;
-      p.vy += 0.02;
-      if(p.x < -30) p.x = window.innerWidth + 30;
-      if(p.x > window.innerWidth + 30) p.x = -30;
-
-      ctx.save();
-      ctx.globalAlpha = p.alpha;
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-      ctx.restore();
-    });
-
-    if(t < durationMs){
-      confettiAnim = requestAnimationFrame(tick);
-    }else{
-      cancelAnimationFrame(confettiAnim);
-      confettiAnim = null;
-      canvas.style.display = 'none';
-      window.removeEventListener('resize', resize);
-    }
-  }
-  confettiAnim = requestAnimationFrame(tick);
-}
-
-function checkWin(){
-  const main = blocks.find(b=>b.isMain);
-  if(main && main.x === 0 && main.y === 0){
-    if(isAuto) stopAuto();
-    startConfetti(2400);
-    Sound.playWin();
-
-    setTimeout(()=>{
-      alert(`クリア！\nモード: ${MODES[mode].label}\n移動回数: ${moveCount}回`);
-      saveBest(moveCount);
-    }, 520);
-  }
-}
-
-/* =========================================================
-   Label auto-fit (prevents clipping)
-   ========================================================= */
-function fitLabelToBlock(blockEl, labelEl){
-  // keep 1-line; shrink font until both width/height fit
-  const pad = 6;
-  const maxW = blockEl.clientWidth - pad;
-  const maxH = blockEl.clientHeight - pad;
-
-  let size = parseFloat(labelEl.style.fontSize || '18');
-  if(!isFinite(size) || size <= 0) size = 18;
-
-  for(let i=0;i<28;i++){
-    const okW = labelEl.scrollWidth <= maxW;
-    const okH = labelEl.scrollHeight <= maxH;
-    if(okW && okH) break;
-    size -= 1;
-    if(size < 10) { size = 10; break; }
-    labelEl.style.fontSize = size + 'px';
-  }
-}
-
-function render(){
-  el.board.innerHTML = '';
-
-  const blockEls = [];
-
-  blocks.forEach((b, i)=>{
-    const d = document.createElement('div');
-    d.className = 'block';
-
-    const bg = TEAM_COLORS[b.name] || '#e8c39e';
-    d.style.background = bg;
-    d.style.color = pickTextColor(bg);
-
-    if(i === selected) d.classList.add('selected');
-    if(isAuto && i === selected) d.classList.add('auto');
-
-    d.style.width  = (b.w*UNIT)+'px';
-    d.style.height = (b.h*UNIT)+'px';
-    d.style.left   = (b.x*UNIT)+'px';
-    d.style.top    = (b.y*UNIT)+'px';
-
-    // direction
-    let dir = 'h';
-    if(b.isMain) dir = 'v';
-    else if(b.w < b.h) dir = 'v';
-    else dir = 'h';
-    d.classList.add(dir === 'v' ? 'vertical' : 'horizontal');
-
-    const id = document.createElement('span');
-    id.className = 'block-id';
-    id.textContent = b.id;
-    d.appendChild(id);
-
-    const label = document.createElement('span');
-    label.className = 'label';
-    label.textContent = b.name;
-
-    // base font sizes (fitLabelToBlock will shrink if needed)
-    if(b.isMain){
-      label.style.fontSize = '40px';
-    }else if(b.w === 1 && b.h === 1){
-      label.style.fontSize = '18px';
-    }else if(b.name.length <= 2){
-      label.style.fontSize = '22px';
-    }else if(b.name.length >= 5){
-      label.style.fontSize = '15px';
-    }else{
-      label.style.fontSize = '18px';
-    }
-
-    d.appendChild(label);
-
-    if(!isAuto){
-      d.onclick = (e)=>{
-        Sound.init();
-        e.stopPropagation();
-        onBlockTap(i);
-      };
-
-      if(i === selected){
-        const moves = getValidMovesFor(i);
-        moves.forEach(m=>{
-          const a = document.createElement('div');
-          a.className = `arrow-btn ${m.cls}`;
-          a.innerHTML = m.ch;
-          a.onclick = (e)=>{
-            e.stopPropagation();
-            doMove(i, m.dx, m.dy);
-          };
-          d.appendChild(a);
-        });
-      }
-    }
-
-    el.board.appendChild(d);
-    blockEls.push({d, label});
-  });
-
-  // after append, auto-fit text
-  requestAnimationFrame(()=>{
-    blockEls.forEach(({d,label})=>fitLabelToBlock(d,label));
-  });
-}
-
-function onBlockTap(i){
-  if(isAuto) return;
-  if(selected === i){
-    selected = -1; render(); return;
-  }
-  const moves = getValidMovesFor(i);
-  if(moves.length === 0) return;
-
-  if(moves.length === 1){
-    doMove(i, moves[0].dx, moves[0].dy);
-    return;
-  }
-  selected = i;
-  render();
-}
-
-document.body.addEventListener('click', ()=>{
-  if(isAuto) return;
-  if(selected !== -1){
-    selected = -1;
-    render();
-  }
-});
-
-/* =========================================================
-   SOLVER (WebWorker) - fast A* -> Beam fallback + cache
-   ========================================================= */
-function toggleSolver(){
-  if(isAuto) stopAuto();
-  else startSolver();
-}
-
-function stopAuto(){
-  isAuto = false;
-  if(autoTimer) clearInterval(autoTimer);
-  autoTimer = null;
-  el.solve.textContent = '模範解答を計算 (自動再生)';
-  el.solve.classList.remove('solving');
-  selected = -1;
-  updateHud();
-  render();
-}
-
-function cancelSolver(){
-  solverCancelToken++;
-  if(solverWorker){
-    try{ solverWorker.terminate(); }catch(_){}
-    solverWorker = null;
-  }
-  el.overlay.style.display = 'none';
-}
-
-function packStateBigInt(blocks){
-  let key = 0n;
-  for(let i=0;i<blocks.length;i++){
-    const x = BigInt(blocks[i].x);
-    const y = BigInt(blocks[i].y);
-    key = (key << 6n) | (x << 3n) | y;
-  }
-  return key;
-}
-
-function startSolver(){
-  Sound.init();
-  const main = blocks.find(b=>b.isMain);
-  if(main && main.x===0 && main.y===0){
-    alert('既にゴールしています。');
-    return;
-  }
-
-  const stateKey = packStateBigInt(blocks).toString(36);
-  const cacheKey = `aishiteru_cache_${mode}_${stateKey}`;
-  const cached = localStorage.getItem(cacheKey);
-  if(cached){
-    try{
-      const moves = JSON.parse(cached);
-      if(Array.isArray(moves) && moves.length){
-        if(confirm(`${moves.length} 手の解（キャッシュ）があります。\n自動再生しますか？`)){
-          isAuto = true;
-          autoMoves = moves;
-          el.solve.textContent = '自動再生を停止';
-          el.solve.classList.add('solving');
-          updateHud();
-          playAuto();
-          return;
-        }
-      }
-    }catch(_){}
-  }
-
-  el.overlaySub.innerHTML = '※端末によっては数秒かかる場合があります<br>（探索中は画面を閉じないでください）';
-  el.overlay.style.display = 'flex';
-
-  const token = ++solverCancelToken;
-
-  const workerScript = `
-    const COLS=6, ROWS=5;
-
-    function buildInfo(blocks){
-      return blocks.map(b=>({w:b.w|0, h:b.h|0, isMain:!!b.isMain}));
-    }
-    function buildState(blocks){
-      const s = new Int8Array(blocks.length*2);
-      for(let i=0;i<blocks.length;i++){
-        s[i*2]   = blocks[i].x|0;
-        s[i*2+1] = blocks[i].y|0;
-      }
-      return s;
-    }
-    function keyOf(state){
-      let k = 0n;
-      for(let i=0;i<state.length;i+=2){
-        const x = BigInt(state[i]);
-        const y = BigInt(state[i+1]);
-        k = (k << 6n) | (x << 3n) | y;
-      }
-      return k;
-    }
-    function canMoveRaw(idx, dx, dy, st, info){
-      const w = info[idx].w, h = info[idx].h;
-      const cx = st[idx*2], cy = st[idx*2+1];
-      const nx = cx + dx, ny = cy + dy;
-
-      if(nx < 0 || nx + w > COLS) return false;
-      if(ny < 0 || ny + h > ROWS) return false;
-
-      const n = info.length;
-      for(let i=0;i<n;i++){
-        if(i===idx) continue;
-        const ox = st[i*2], oy = st[i*2+1];
-        const ow = info[i].w, oh = info[i].h;
-        if(nx < ox + ow && nx + w > ox &&
-           ny < oy + oh && ny + h > oy){
-          return false;
-        }
-      }
-      return true;
-    }
-
-    function heuristic(st, mainIdx, info){
-      const mx = st[mainIdx*2];
-      const my = st[mainIdx*2+1];
-      let dist = mx + my;
-
-      const minX = 0, minY = 0;
-      const maxX = mx, maxY = my;
-
-      let pen = 0;
-      for(let i=0;i<info.length;i++){
-        if(i===mainIdx) continue;
-        const x = st[i*2], y = st[i*2+1];
-        const w = info[i].w, h = info[i].h;
-        const inRect = !(x+w-1 < minX || x > maxX || y+h-1 < minY || y > maxY);
-        if(inRect) pen++;
-      }
-      return dist + pen*0.65;
-    }
-
-    class MinHeap{
-      constructor(){ this.a=[]; }
-      push(x){
-        const a=this.a; a.push(x);
-        let i=a.length-1;
-        while(i>0){
-          const p=(i-1)>>1;
-          if(a[p].f <= a[i].f) break;
-          const t=a[p]; a[p]=a[i]; a[i]=t;
-          i=p;
-        }
-      }
-      pop(){
-        const a=this.a;
-        if(a.length===0) return null;
-        const top=a[0];
-        const last=a.pop();
-        if(a.length){
-          a[0]=last;
-          let i=0;
-          for(;;){
-            const l=i*2+1, r=l+1;
-            let m=i;
-            if(l<a.length && a[l].f < a[m].f) m=l;
-            if(r<a.length && a[r].f < a[m].f) m=r;
-            if(m===i) break;
-            const t=a[m]; a[m]=a[i]; a[i]=t;
-            i=m;
-          }
-        }
-        return top;
-      }
-      get size(){ return this.a.length; }
-    }
-
-    function reconstruct(parent, movePack, nodeId){
-      const out=[];
-      while(nodeId !== -1){
-        const mp = movePack[nodeId];
-        const p = parent[nodeId];
-        if(mp !== -1){
-          const idx = mp >>> 2;
-          const dir = mp & 3;
-          let dx=0, dy=0;
-          if(dir===0) dy=-1;
-          else if(dir===1) dy=1;
-          else if(dir===2) dx=-1;
-          else dx=1;
-          out.push({index:idx, dx, dy});
-        }
-        nodeId = p;
-      }
-      out.reverse();
-      return out;
-    }
-
-    async function solveAStar(startBlocks, opt){
-      const info = buildInfo(startBlocks);
-      const mainIdx = startBlocks.findIndex(b=>b.isMain);
-      const startState = buildState(startBlocks);
-
-      const SHIFT = 1 << 22;
-      const best = new Map();
-
-      const states = [];
-      const parent = [];
-      const movePack = [];
-
-      function newNode(st, pId, mp){
-        const id = states.length;
-        states.push(st);
-        parent.push(pId);
-        movePack.push(mp);
-        return id;
-      }
-
-      const heap = new MinHeap();
-      const k0 = keyOf(startState);
-      const h0 = heuristic(startState, mainIdx, info);
-      const rootId = newNode(startState, -1, -1);
-
-      best.set(k0, 0 * SHIFT + rootId);
-      heap.push({f: opt.weight*h0, g:0, id:rootId});
-
-      const dirs = [
-        {dx:0,dy:-1,dir:0},
-        {dx:0,dy:1, dir:1},
-        {dx:-1,dy:0,dir:2},
-        {dx:1,dy:0, dir:3}
-      ];
-
-      const t0 = performance.now();
-      let expanded = 0;
-      let lastReport = 0;
-
-      while(heap.size){
-        const now = performance.now();
-        if(now - t0 > opt.timeLimitMs) return null;
-        if(expanded > opt.expandLimit) return null;
-
-        const node = heap.pop();
-        const st = states[node.id];
-
-        if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0){
-          return reconstruct(parent, movePack, node.id);
-        }
-
-        expanded++;
-        if(expanded - lastReport >= 9000){
-          lastReport = expanded;
-          postMessage({cmd:'progress', expanded, elapsed: Math.round(now - t0)});
-        }
-
-        for(let i=0;i<info.length;i++){
-          for(const d of dirs){
-            if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;
-
-            const ns = new Int8Array(st);
-            ns[i*2]   += d.dx;
-            ns[i*2+1] += d.dy;
-
-            const nk = keyOf(ns);
-            const ng = node.g + 1;
-
-            const prev = best.get(nk);
-            if(prev !== undefined){
-              const pg = (prev / SHIFT) | 0;
-              if(pg <= ng) continue;
-            }
-
-            const nid = newNode(ns, node.id, (i<<2) | d.dir);
-            best.set(nk, ng * SHIFT + nid);
-
-            const nh = heuristic(ns, mainIdx, info);
-            const nf = ng + opt.weight*nh;
-            heap.push({f:nf, g:ng, id:nid});
-          }
-        }
-      }
-      return null;
-    }
-
-    async function solveBeam(startBlocks, opt){
-      const info = buildInfo(startBlocks);
-      const mainIdx = startBlocks.findIndex(b=>b.isMain);
-      const start = buildState(startBlocks);
-
-      const dirs = [
-        {dx:0,dy:-1,dir:0},
-        {dx:0,dy:1, dir:1},
-        {dx:-1,dy:0,dir:2},
-        {dx:1,dy:0, dir:3}
-      ];
-
-      const visited = new Set();
-      visited.add(keyOf(start));
-
-      const states = [start];
-      const parent = [-1];
-      const movePack = [-1];
-
-      function newNode(st, pId, mp){
-        const id = states.length;
-        states.push(st);
-        parent.push(pId);
-        movePack.push(mp);
-        return id;
-      }
-
-      let level = [{id:0, score:heuristic(start, mainIdx, info), depth:0}];
-      const t0 = performance.now();
-      let expanded = 0;
-
-      for(let depth=0; depth<opt.maxDepth; depth++){
-        if(performance.now() - t0 > opt.timeLimitMs) return null;
-
-        const next = [];
-        for(const node of level){
-          const st = states[node.id];
-          if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0){
-            return reconstruct(parent, movePack, node.id);
-          }
-
-          for(let i=0;i<info.length;i++){
-            for(const d of dirs){
-              if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;
-
-              const ns = new Int8Array(st);
-              ns[i*2]   += d.dx;
-              ns[i*2+1] += d.dy;
-
-              const k = keyOf(ns);
-              if(visited.has(k)) continue;
-              visited.add(k);
-
-              const nid = newNode(ns, node.id, (i<<2) | d.dir);
-              const h = heuristic(ns, mainIdx, info);
-              const score = (depth+1) + h*5.0;
-              next.push({id:nid, score, depth:depth+1});
-              expanded++;
-            }
-          }
-        }
-
-        if(expanded % 20000 === 0){
-          postMessage({cmd:'progress', expanded, elapsed: Math.round(performance.now() - t0)});
-        }
-
-        if(next.length === 0) return null;
-        next.sort((a,b)=>a.score-b.score);
-        level = next.length > opt.beamWidth ? next.slice(0,opt.beamWidth) : next;
-      }
-
-      return null;
-    }
-
-    onmessage = async (e)=>{
-      const msg = e.data;
-      if(!msg || msg.cmd !== 'solve') return;
-
-      const blocks = msg.blocks;
-      try{
-        let moves = await solveAStar(blocks, {timeLimitMs: 4500, expandLimit: 260000, weight: 2.45});
-        if(!moves) moves = await solveAStar(blocks, {timeLimitMs: 9500, expandLimit: 700000, weight: 2.05});
-        if(!moves) moves = await solveBeam(blocks, {timeLimitMs: 28000, maxDepth: 2800, beamWidth: 1700});
-        postMessage({cmd:'done', moves});
-      }catch(err){
-        postMessage({cmd:'error', error: String(err && err.message ? err.message : err)});
-      }
-    };
-  `;
-
-  const blob = new Blob([workerScript], {type:'application/javascript'});
-  solverWorker = new Worker(URL.createObjectURL(blob));
-
-  solverWorker.onmessage = (ev)=>{
-    if(token !== solverCancelToken) return;
-
-    const msg = ev.data;
-    if(!msg) return;
-
-    if(msg.cmd === 'progress'){
-      el.overlaySub.innerHTML = `探索中...<br>展開: ${msg.expanded.toLocaleString()}<br>経過: ${msg.elapsed} ms`;
-      return;
-    }
-
-    if(msg.cmd === 'error'){
-      el.overlay.style.display = 'none';
-      alert('エラーが発生しました: ' + msg.error);
-      cancelSolver();
-      return;
-    }
-
-    if(msg.cmd === 'done'){
-      el.overlay.style.display = 'none';
-
-      const moves = msg.moves;
-      if(!moves){
-        alert('解が見つかりませんでした…（探索上限に到達）');
-        cancelSolver();
-        return;
-      }
-
-      try{ localStorage.setItem(cacheKey, JSON.stringify(moves)); }catch(_){}
-
-      if(confirm(`${moves.length} 手の解が見つかりました。\n（※最短保証はありません）\n\n自動再生しますか？`)){
-        isAuto = true;
-        autoMoves = moves;
-        el.solve.textContent = '自動再生を停止';
-        el.solve.classList.add('solving');
-        updateHud();
-        playAuto();
-      }else{
-        cancelSolver();
-      }
+  // MODE2: 2x1 * 7, 1x2 * 4, 1x1 * 2, main 2x2（合計14ピース）
+  // ※この配置は「解が出る」ことを前提に調整済み（空き2マス）
+  const CHAMP_LAYOUT = [
+    { id:99, name:"新潟", w:2, h:2, x:4, y:3, isMain:true },
+
+    // 近い順の雰囲気になるように配置（形状は固定要件なし）
+    { id:6,  name:"鹿島",  w:2, h:1, x:0, y:0 },
+    { id:12, name:"柏",    w:1, h:2, x:0, y:1 },
+    { id:4,  name:"京都",  w:2, h:1, x:2, y:0 },
+    { id:1,  name:"広島",  w:2, h:1, x:1, y:1 },
+    { id:10, name:"神戸",  w:2, h:1, x:1, y:2 },
+    { id:7,  name:"町田",  w:2, h:1, x:4, y:0 },
+    { id:3,  name:"浦和",  w:1, h:2, x:3, y:1 },
+    { id:8,  name:"川崎",  w:1, h:2, x:1, y:3 },
+    { id:5,  name:"G大阪", w:1, h:2, x:4, y:1 },
+    { id:2,  name:"C大阪", w:2, h:1, x:2, y:3 },
+    { id:13, name:"F東京", w:1, h:1, x:5, y:1 },
+    { id:11, name:"福岡",  w:2, h:1, x:2, y:4 },
+    { id:9,  name:"岡山",  w:1, h:1, x:5, y:2 },
+  ];
+
+  const MODES = {
+    promote: {
+      label: "目指せ!J1昇格",
+      minKey: LS.minPromote,
+      bestKey: LS.bestPromote,
+      layout: PROMOTE_LAYOUT
+    },
+    champ: {
+      label: "目指せ!J1優勝",
+      minKey: LS.minChamp,
+      bestKey: LS.bestChamp,
+      layout: CHAMP_LAYOUT
     }
   };
 
-  solverWorker.postMessage({cmd:'solve', blocks: deepCopy(blocks)});
-}
+  /* =========================================================
+   *  状態
+   * ========================================================= */
+  let currentMode = "promote";
+  let blocks = [];            // 現在盤面（deep copy）
+  let history = [];           // undo
+  let future = [];            // redo
+  let moves = 0;
+  let minMovesKnown = null;
 
-function playAuto(){
-  let step = 0;
-  autoTimer = setInterval(()=>{
-    if(!isAuto){ stopAuto(); return; }
-    if(step >= autoMoves.length){ stopAuto(); return; }
+  let dragging = null;        // {id,startX,startY}
+  let pointerId = null;
 
-    const m = autoMoves[step++];
-    selected = m.index;
+  /* =========================================================
+   *  DOM
+   * ========================================================= */
+  const boardArea = document.getElementById("boardArea");
+  const boardScale = document.getElementById("boardScale");
+  const boardFrame = document.getElementById("boardFrame");
+  const boardInner = document.getElementById("boardInner");
+  const goalBadge = document.getElementById("goalBadge");
 
-    Sound.playMove();
-    applyMove(m.index, m.dx, m.dy);
-    moveCount++;
-    undoStack.push(m);
-    redoStack = [];
+  const movesCountEl = document.getElementById("movesCount");
+  const minMovesEl = document.getElementById("minMoves");
+  const modeLabelEl = document.getElementById("modeLabel");
 
-    updateHud();
-    render();
-    checkWin();
-  }, 190);
-}
+  const modePromoteBtn = document.getElementById("modePromote");
+  const modeChampBtn = document.getElementById("modeChamp");
 
-/* =========================================================
-   BOOT
-   ========================================================= */
-function init(){
-  loadSoundSettings();
-  setModeUI();
-  loadBest();
-  resetGame();
-  requestAnimationFrame(fitBoard);
+  const undoBtn = document.getElementById("undoBtn");
+  const redoBtn = document.getElementById("redoBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const clearBestBtn = document.getElementById("clearBestBtn");
 
-  // unlock + auto-start
-  document.body.addEventListener('pointerdown', function first(){
-    Sound.init();
-    if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM();
-    document.body.removeEventListener('pointerdown', first);
+  const solveBtn = document.getElementById("solveBtn");
+
+  const overlay = document.getElementById("solverOverlay");
+  const solverInfo = document.getElementById("solverInfo");
+  const solverCancel = document.getElementById("solverCancel");
+
+  /* =========================================================
+   *  Audio（10段階、最大値を大きく）
+   * ========================================================= */
+  let audioUnlocked = false;
+  let audioCtx = null;
+
+  let masterGain = null;
+  let bgmGain = null;
+  let seGain = null;
+
+  let bgmOn = false;
+  let seOn = true;
+  let bgmVol = 5; // 0..10
+  let seVol  = 5; // 0..10
+
+  const bgmToggle = document.getElementById("bgmToggle");
+  const seToggle = document.getElementById("seToggle");
+  const bgmVolSlider = document.getElementById("bgmVol");
+  const seVolSlider  = document.getElementById("seVol");
+  const bgmVolNum = document.getElementById("bgmVolNum");
+  const seVolNum  = document.getElementById("seVolNum");
+
+  // BGM scheduler
+  let bgmTimer = null;
+  let bgmStep = 0;
+  let bgmNextTime = 0;
+
+  // 16-step loop（ちょいポップ）
+  const SCALE = {
+    C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+    C5:523.25, D5:587.33, E5:659.25, G5:783.99
+  };
+
+  const BGM_PATTERNS = {
+    promote: [
+      SCALE.C4, 0, SCALE.E4, 0, SCALE.G4, 0, SCALE.E4, 0,
+      SCALE.D4, 0, SCALE.F4, 0, SCALE.A4, 0, SCALE.G4, 0
+    ],
+    champ: [
+      SCALE.E4, 0, SCALE.G4, 0, SCALE.A4, 0, SCALE.G4, 0,
+      SCALE.F4, 0, SCALE.A4, 0, SCALE.C5, 0, SCALE.B4, 0
+    ]
+  };
+
+  function ensureAudio(){
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    bgmGain = audioCtx.createGain();
+    seGain  = audioCtx.createGain();
+
+    masterGain.gain.value = 0.9;
+    bgmGain.connect(masterGain);
+    seGain.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    applyVolumes();
+  }
+
+  // 「最大値は現在より大幅に大きく」：10/10でかなり大きめに
+  function applyVolumes(){
+    if (!audioCtx) return;
+
+    const bgmMul = bgmOn ? (bgmVol/10) : 0;
+    const seMul  = seOn  ? (seVol/10)  : 0;
+
+    // 以前より上を出す（ただしクリップしづらい範囲）
+    bgmGain.gain.value = bgmMul * 0.95;  // 0..0.95
+    seGain.gain.value  = seMul  * 1.25;  // 0..1.25
+  }
+
+  function playClickSE(){
+    if (!audioCtx) return;
+    if (!seOn || seVol === 0) return;
+
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+
+    o.type = "square";
+    o.frequency.value = 620;
+
+    g.gain.value = 0.0001;
+    o.connect(g);
+    g.connect(seGain);
+
+    const t = audioCtx.currentTime;
+    g.gain.exponentialRampToValueAtTime(0.20, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+    o.start(t);
+    o.stop(t + 0.09);
+  }
+
+  function playWinSE(){
+    if (!audioCtx) return;
+    if (!seOn || seVol === 0) return;
+
+    const notes = [SCALE.C5, SCALE.E5, SCALE.G5, SCALE.E5, SCALE.C5];
+    let t = audioCtx.currentTime;
+
+    for (let i=0;i<notes.length;i++){
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = "square";
+      o.frequency.value = notes[i];
+
+      g.gain.value = 0.0001;
+      o.connect(g);
+      g.connect(seGain);
+
+      g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+      o.start(t);
+      o.stop(t + 0.15);
+      t += 0.12;
+    }
+  }
+
+  function startBGM(){
+    if (!audioCtx) return;
+    stopBGM();
+
+    bgmStep = 0;
+    bgmNextTime = audioCtx.currentTime + 0.06;
+
+    const stepDur = 0.12; // 16 steps loop
+
+    bgmTimer = setInterval(() => {
+      if (!audioCtx) return;
+      if (!bgmOn || bgmVol === 0) return;
+
+      const now = audioCtx.currentTime;
+      while (bgmNextTime < now + 0.10){
+        const pattern = BGM_PATTERNS[currentMode] || BGM_PATTERNS.promote;
+        const freq = pattern[bgmStep % 16];
+
+        if (freq && freq > 0){
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = "square";
+          o.frequency.value = freq;
+
+          g.gain.value = 0.0001;
+          o.connect(g);
+          g.connect(bgmGain);
+
+          const t = bgmNextTime;
+          g.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
+
+          o.start(t);
+          o.stop(t + 0.11);
+        }
+
+        bgmStep++;
+        bgmNextTime += stepDur;
+      }
+    }, 30);
+  }
+
+  function stopBGM(){
+    if (bgmTimer){
+      clearInterval(bgmTimer);
+      bgmTimer = null;
+    }
+  }
+
+  function updateSoundUI(){
+    bgmVolSlider.value = String(bgmVol);
+    seVolSlider.value  = String(seVol);
+    bgmVolNum.textContent = String(bgmVol);
+    seVolNum.textContent  = String(seVol);
+
+    bgmToggle.classList.toggle("on", bgmOn);
+    bgmToggle.classList.toggle("off", !bgmOn);
+    bgmToggle.textContent = bgmOn ? "♪ BGM: ON" : "♪ BGM: OFF";
+
+    seToggle.classList.toggle("on", seOn);
+    seToggle.classList.toggle("off", !seOn);
+    seToggle.textContent = seOn ? "📣 効果音: ON" : "📣 効果音: OFF";
+
+    applyVolumes();
+  }
+
+  /* =========================================================
+   *  Confetti
+   * ========================================================= */
+  const confettiCanvas = document.getElementById("confettiCanvas");
+  const cctx = confettiCanvas.getContext("2d");
+  let confettiParticles = [];
+  let confettiRAF = null;
+
+  function resizeConfetti(){
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+  }
+
+  function confettiBurst(){
+    resizeConfetti();
+    confettiCanvas.style.display = "block";
+
+    const W = confettiCanvas.width;
+    const H = confettiCanvas.height;
+
+    confettiParticles = [];
+    const count = 140;
+
+    for (let i=0;i<count;i++){
+      const x = W * (0.25 + Math.random()*0.5);
+      const y = H * 0.12;
+      const vx = (Math.random()-0.5) * 8;
+      const vy = 3 + Math.random() * 8;
+      const size = 6 + Math.random()*8;
+      const rot = Math.random()*Math.PI*2;
+      const vr = (Math.random()-0.5)*0.3;
+      const hue = Math.floor(Math.random()*360);
+
+      confettiParticles.push({x,y,vx,vy,size,rot,vr,hue,life:0,ttl: 240 + Math.random()*120});
+    }
+
+    if (confettiRAF) cancelAnimationFrame(confettiRAF);
+    const gravity = 0.12;
+
+    const tick = () => {
+      cctx.clearRect(0,0,W,H);
+      for (const p of confettiParticles){
+        p.life++;
+        p.vy += gravity;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+
+        const alpha = Math.max(0, 1 - p.life / p.ttl);
+        cctx.save();
+        cctx.translate(p.x, p.y);
+        cctx.rotate(p.rot);
+        cctx.globalAlpha = alpha;
+        cctx.fillStyle = "hsl(" + p.hue + " 85% 55%)";
+        cctx.fillRect(-p.size/2, -p.size/2, p.size, p.size*0.6);
+        cctx.restore();
+      }
+
+      confettiParticles = confettiParticles.filter(p => p.life < p.ttl && p.y < H + 80);
+
+      if (confettiParticles.length){
+        confettiRAF = requestAnimationFrame(tick);
+      }else{
+        confettiCanvas.style.display = "none";
+      }
+    };
+
+    confettiRAF = requestAnimationFrame(tick);
+  }
+
+  /* =========================================================
+   *  盤面描画
+   * ========================================================= */
+  function deepCopyLayout(layout){
+    return layout.map(b => ({...b}));
+  }
+
+  function cellPx(){
+    const cs = getComputedStyle(document.documentElement);
+    const cell = parseFloat(cs.getPropertyValue("--cell")) || 86;
+    const gap  = parseFloat(cs.getPropertyValue("--gap")) || 6;
+    const pad  = parseFloat(cs.getPropertyValue("--inner-pad")) || 10;
+    const frame= parseFloat(cs.getPropertyValue("--frame-thick")) || 10;
+    return { cell, gap, pad, frame };
+  }
+
+  function boardPixelSize(){
+    const { cell, pad, frame } = cellPx();
+    const innerW = COLS * cell;
+    const innerH = ROWS * cell;
+    const frameW = innerW + pad*2 + frame*2;
+    const frameH = innerH + pad*2 + frame*2;
+    return { frameW, frameH, innerW, innerH };
+  }
+
+  function fitBoardToScreen(){
+    const { frameW, frameH } = boardPixelSize();
+    // boardScale は frame サイズで組む（CSSのpadding含む）
+    const maxW = Math.min(window.innerWidth - 24, 720);
+    const scale = Math.min(1, maxW / frameW);
+
+    boardArea.style.height = (frameH * scale + 2) + "px";
+    boardScale.style.width = frameW + "px";
+    boardScale.style.height = frameH + "px";
+    boardScale.style.transform = "translateX(-50%) scale(" + scale + ")";
+  }
+
+  function renderBoard(){
+    // clear old blocks
+    const old = boardInner.querySelectorAll(".block");
+    old.forEach(el => el.remove());
+
+    const { cell, gap } = cellPx();
+
+    // goal badge size sync (2x2)
+    goalBadge.style.width  = (cell*2 - gap) + "px";
+    goalBadge.style.height = (cell*2 - gap) + "px";
+
+    for (const b of blocks){
+      const el = document.createElement("div");
+      el.className = "block";
+      el.dataset.id = String(b.id);
+
+      const { bg, fg } = getTeamColor(b.name);
+      el.style.background = bg;
+      el.style.color = fg;
+
+      // position / size
+      const left = b.x * cell;
+      const top  = b.y * cell;
+      const wpx  = b.w * cell - gap;
+      const hpx  = b.h * cell - gap;
+
+      el.style.left = left + "px";
+      el.style.top  = top  + "px";
+      el.style.width  = wpx + "px";
+      el.style.height = hpx + "px";
+
+      // index
+      const idEl = document.createElement("div");
+      idEl.className = "id";
+      idEl.textContent = String(b.id);
+      el.appendChild(idEl);
+
+      // name
+      const nameEl = document.createElement("div");
+      nameEl.className = "name";
+      nameEl.textContent = b.name;
+
+      // 1x1 は縦書き＋フォント縮小（「いわき」2行問題の回避）
+      const textLen = (b.name || "").length;
+      if (b.w === 1 && b.h === 1){
+        nameEl.classList.add("vtext");
+        const fs = Math.max(12, Math.min(22, Math.floor(72 / Math.max(2, textLen))));
+        nameEl.style.fontSize = fs + "px";
+      }else{
+        // 長いほど少し小さく
+        let fs = 26;
+        if (textLen >= 4) fs = 22;
+        if (textLen >= 5) fs = 20;
+        if (textLen >= 6) fs = 18;
+        nameEl.style.fontSize = fs + "px";
+      }
+
+      // main block stronger text
+      if (b.isMain){
+        nameEl.style.fontSize = "38px";
+        nameEl.style.letterSpacing = ".06em";
+        nameEl.style.textShadow = "0 2px 8px rgba(0,0,0,.18)";
+      }
+
+      el.appendChild(nameEl);
+
+      // Pointer events
+      el.addEventListener("pointerdown", onBlockPointerDown);
+      el.addEventListener("pointermove", onBlockPointerMove);
+      el.addEventListener("pointerup", onBlockPointerUp);
+      el.addEventListener("pointercancel", onBlockPointerUp);
+
+      boardInner.appendChild(el);
+    }
+
+    fitBoardToScreen();
+  }
+
+  function updateUI(){
+    movesCountEl.textContent = String(moves);
+    minMovesEl.textContent = (minMovesKnown == null) ? "-" : String(minMovesKnown);
+
+    undoBtn.disabled = history.length === 0;
+    redoBtn.disabled = future.length === 0;
+
+    modePromoteBtn.classList.toggle("active", currentMode === "promote");
+    modeChampBtn.classList.toggle("active", currentMode === "champ");
+
+    modeLabelEl.textContent = "▼ " + MODES[currentMode].label + " ▼";
+    goalBadge.textContent = MODES[currentMode].label;
+  }
+
+  /* =========================================================
+   *  盤面ルール
+   * ========================================================= */
+  function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh){
+    return !(ax+aw<=bx || bx+bw<=ax || ay+ah<=by || by+bh<=ay);
+  }
+
+  function canMove(blockId, dx, dy){
+    const b = blocks.find(x => x.id === blockId);
+    if (!b) return false;
+
+    const nx = b.x + dx;
+    const ny = b.y + dy;
+
+    if (nx < 0 || ny < 0 || nx + b.w > COLS || ny + b.h > ROWS) return false;
+
+    for (const o of blocks){
+      if (o.id === b.id) continue;
+      if (rectsOverlap(nx,ny,b.w,b.h, o.x,o.y,o.w,o.h)) return false;
+    }
+    return true;
+  }
+
+  function applyMove(blockId, dx, dy, silent=false){
+    if (!canMove(blockId, dx, dy)) return false;
+
+    // push history
+    history.push(snapshot());
+    future = [];
+
+    const b = blocks.find(x => x.id === blockId);
+    b.x += dx;
+    b.y += dy;
+    moves++;
+
+    if (!silent){
+      ensureAudio();
+      playClickSE();
+    }
+
+    renderBoard();
+    updateUI();
+
+    if (checkWin()){
+      onWin();
+    }
+    return true;
+  }
+
+  function snapshot(){
+    return {
+      blocks: blocks.map(b => ({...b})),
+      moves
+    };
+  }
+
+  function restoreSnap(snap){
+    blocks = snap.blocks.map(b => ({...b}));
+    moves = snap.moves;
+    renderBoard();
+    updateUI();
+  }
+
+  function undo(){
+    if (!history.length) return;
+    future.push(snapshot());
+    const prev = history.pop();
+    restoreSnap(prev);
+  }
+
+  function redo(){
+    if (!future.length) return;
+    history.push(snapshot());
+    const next = future.pop();
+    restoreSnap(next);
+  }
+
+  function checkWin(){
+    const main = blocks.find(b => b.isMain);
+    if (!main) return false;
+    return main.x === 0 && main.y === 0;
+  }
+
+  function onWin(){
+    ensureAudio();
+    playWinSE();
+    confettiBurst();
+
+    // best update
+    const bestKey = MODES[currentMode].bestKey;
+    const prevBest = parseInt(localStorage.getItem(bestKey) || "0", 10) || 0;
+    if (prevBest === 0 || moves < prevBest){
+      localStorage.setItem(bestKey, String(moves));
+    }
+
+    setTimeout(() => {
+      alert("クリア！ おめでとう🎉\n手数: " + moves);
+    }, 30);
+  }
+
+  function resetToStart(){
+    blocks = deepCopyLayout(MODES[currentMode].layout);
+    history = [];
+    future = [];
+    moves = 0;
+
+    // 最少（前回計算値）は保持して表示したいので、minMovesKnownは消さない
+    renderBoard();
+    updateUI();
+  }
+
+  function clearRecords(){
+    localStorage.removeItem(MODES.promote.bestKey);
+    localStorage.removeItem(MODES.champ.bestKey);
+    localStorage.removeItem(MODES.promote.minKey);
+    localStorage.removeItem(MODES.champ.minKey);
+    minMovesKnown = null;
+    updateUI();
+    alert("記録を消去しました。");
+  }
+
+  /* =========================================================
+   *  ブロック操作（スワイプ1手）
+   * ========================================================= */
+  const SWIPE_THRESHOLD = 18;
+
+  function onBlockPointerDown(e){
+    ensureAudio(); // ここで一度アンロック（iOS対策）
+    const id = parseInt(e.currentTarget.dataset.id, 10);
+    pointerId = e.pointerId;
+    e.currentTarget.setPointerCapture(pointerId);
+    dragging = { id, startX: e.clientX, startY: e.clientY, moved:false };
+  }
+
+  function onBlockPointerMove(e){
+    if (!dragging) return;
+    if (e.pointerId !== pointerId) return;
+
+    const dx = e.clientX - dragging.startX;
+    const dy = e.clientY - dragging.startY;
+    if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
+
+    dragging.moved = true;
+
+    // decide direction
+    let mdx=0, mdy=0;
+    if (Math.abs(dx) > Math.abs(dy)){
+      mdx = dx > 0 ? 1 : -1;
+    }else{
+      mdy = dy > 0 ? 1 : -1;
+    }
+
+    // only one move per swipe
+    const ok = applyMove(dragging.id, mdx, mdy);
+    dragging = null;
+    pointerId = null;
+
+    if (!ok){
+      // move failed; still stop dragging to avoid repeated attempts
+    }
+  }
+
+  function onBlockPointerUp(e){
+    if (!dragging) return;
+    if (e.pointerId !== pointerId) return;
+    dragging = null;
+    pointerId = null;
+  }
+
+  /* =========================================================
+   *  Mode切替（リロード直後から表示されるように）
+   * ========================================================= */
+  function switchMode(mode){
+    if (!MODES[mode]) return;
+    currentMode = mode;
+    localStorage.setItem(LS.mode, currentMode);
+
+    // minMoves load
+    const minStr = localStorage.getItem(MODES[currentMode].minKey);
+    minMovesKnown = (minStr && !isNaN(parseInt(minStr,10))) ? parseInt(minStr,10) : null;
+
+    blocks = deepCopyLayout(MODES[currentMode].layout);
+    history = [];
+    future = [];
+    moves = 0;
+
+    renderBoard();
+    updateUI();
+
+    // BGM pattern also changes
+    if (bgmOn && audioCtx){
+      startBGM();
+    }
+  }
+
+  /* =========================================================
+   *  Solver (Web Worker)
+   *  - 衝突判定をビットマスク化して大幅高速化
+   *  - progress更新を細かくして「止まって見える」を回避
+   * ========================================================= */
+  let solverWorker = null;
+  let solverStartTime = 0;
+
+  const DIRS = [
+    {dx:-1,dy:0},  // 0: L
+    {dx:0,dy:-1},  // 1: U
+    {dx:1,dy:0},   // 2: R
+    {dx:0,dy:1}    // 3: D
+  ];
+
+  function showOverlay(text){
+    solverInfo.textContent = text;
+    overlay.style.display = "flex";
+  }
+  function hideOverlay(){
+    overlay.style.display = "none";
+  }
+
+  function stopSolver(){
+    if (solverWorker){
+      solverWorker.terminate();
+      solverWorker = null;
+    }
+    hideOverlay();
+  }
+
+  function startSolver(){
+    ensureAudio();
+
+    // すでに動作中なら止める
+    if (solverWorker){
+      stopSolver();
+      return;
+    }
+
+    // 盤面を workerへ送る（必要最小限）
+    const payload = blocks.map(b => ({
+      id: b.id,
+      x: b.x, y: b.y,
+      w: b.w, h: b.h,
+      isMain: !!b.isMain
+    }));
+
+    showOverlay("初期化中…");
+    solverStartTime = performance.now();
+
+    solverWorker = createSolverWorker();
+    solverWorker.postMessage({ type:"start", cols:COLS, rows:ROWS, blocks: payload });
+
+    solverWorker.onmessage = (ev) => {
+      const msg = ev.data;
+      if (!msg) return;
+
+      if (msg.type === "progress"){
+        const dt = ((performance.now() - solverStartTime)/1000).toFixed(2);
+        solverInfo.textContent =
+          "phase: " + msg.phase + "\n" +
+          "expanded: " + msg.expanded + "\n" +
+          "open: " + msg.open + "\n" +
+          "bestH: " + msg.bestH.toFixed(2) + "\n" +
+          "time: " + dt + "s";
+        return;
+      }
+
+      if (msg.type === "done"){
+        const packedMoves = msg.moves || [];
+        const minLen = msg.minLen ?? packedMoves.length;
+
+        // 最少表示（保存してリロード後も出す）
+        minMovesKnown = minLen;
+        localStorage.setItem(MODES[currentMode].minKey, String(minLen));
+        updateUI();
+
+        stopSolver();
+
+        // 自動再生
+        autoplayPackedMoves(packedMoves);
+        return;
+      }
+
+      if (msg.type === "fail"){
+        const dt = ((performance.now() - solverStartTime)/1000).toFixed(2);
+        const reason = msg.reason || "unknown";
+        stopSolver();
+        alert("解が見つかりませんでした。\n理由: " + reason + "\n展開: " + (msg.expanded||0) + "\n時間: " + dt + "s");
+        return;
+      }
+    };
+
+    solverWorker.onerror = (e) => {
+      console.error(e);
+      stopSolver();
+      alert("ソルバーでエラーが発生しました。");
+    };
+  }
+
+  function autoplayPackedMoves(packed){
+    if (!packed || !packed.length){
+      alert("既にゴール状態、または手順が空でした。");
+      return;
+    }
+
+    // 再生中は操作無効
+    solveBtn.disabled = true;
+    undoBtn.disabled = true;
+    redoBtn.disabled = true;
+
+    const originalSnap = snapshot();
+
+    let idx = 0;
+    const step = () => {
+      if (idx >= packed.length){
+        solveBtn.disabled = false;
+        updateUI();
+        return;
+      }
+
+      const m = packed[idx++];
+      const bi = (m >> 2);
+      const di = (m & 3);
+      const d = DIRS[di];
+
+      const b = blocks[bi];
+      if (!b){
+        // ピースインデックス不整合なら終了
+        restoreSnap(originalSnap);
+        solveBtn.disabled = false;
+        updateUI();
+        return;
+      }
+
+      // silent=false だと音が出る
+      applyMove(b.id, d.dx, d.dy, false);
+
+      setTimeout(step, 140);
+    };
+
+    // 盤面を最初から再生したいので開始時点でリセット
+    resetToStart();
+    setTimeout(step, 200);
+  }
+
+  function createSolverWorker(){
+    const workerScript =
+`self.onmessage = function(ev){
+  const msg = ev.data;
+  if (!msg || msg.type !== "start") return;
+
+  const COLS = msg.cols|0;
+  const ROWS = msg.rows|0;
+  const blocks = msg.blocks || [];
+  const N = blocks.length;
+
+  const mainIdx = blocks.findIndex(b => b.isMain);
+  if (mainIdx < 0){
+    self.postMessage({type:"fail", reason:"main_not_found", expanded:0});
+    return;
+  }
+
+  // shapes
+  const W = new Int8Array(N);
+  const H = new Int8Array(N);
+  for (let i=0;i<N;i++){
+    W[i] = blocks[i].w|0;
+    H[i] = blocks[i].h|0;
+  }
+
+  // precompute bitmask for each piece and position (pos = y*COLS + x)
+  // board cells <= 30 => 32-bit mask ok
+  const MASK = [];
+  for (let i=0;i<N;i++){
+    const arr = new Uint32Array(COLS*ROWS);
+    const w = W[i], h = H[i];
+    for (let y=0;y<=ROWS-h;y++){
+      for (let x=0;x<=COLS-w;x++){
+        let m = 0;
+        for (let dy=0;dy<h;dy++){
+          for (let dx=0;dx<w;dx++){
+            const c = (y+dy)*COLS + (x+dx);
+            m |= (1 << c);
+          }
+        }
+        arr[y*COLS + x] = m >>> 0;
+      }
+    }
+    MASK.push(arr);
+  }
+
+  // state: Int8Array [x0,y0,x1,y1,...]
+  const start = new Int8Array(N*2);
+  for (let i=0;i<N;i++){
+    start[i*2]   = blocks[i].x|0;
+    start[i*2+1] = blocks[i].y|0;
+  }
+
+  function keyOf(st){
+    // values are 0..5, encode to chars (fast+small)
+    let s = "";
+    for (let i=0;i<st.length;i++){
+      s += String.fromCharCode(65 + st[i]);
+    }
+    return s;
+  }
+
+  function occOf(st){
+    let occ = 0;
+    for (let i=0;i<N;i++){
+      const x = st[i*2], y = st[i*2+1];
+      occ |= MASK[i][y*COLS + x];
+    }
+    return occ >>> 0;
+  }
+
+  // heuristic: main dist + corridor blockers (fast)
+  function heuristic(st){
+    const mx = st[mainIdx*2];
+    const my = st[mainIdx*2+1];
+    let dist = mx + my;
+
+    // corridor rectangle from (0,0) to main top-left
+    const minx = 0, miny = 0, maxx = mx, maxy = my;
+    let blocksIn = 0;
+
+    for (let i=0;i<N;i++){
+      if (i === mainIdx) continue;
+      const x = st[i*2], y = st[i*2+1];
+      const w = W[i], h = H[i];
+      if (!(x+w-1 < minx || x > maxx || y+h-1 < miny || y > maxy)){
+        blocksIn++;
+      }
+    }
+
+    // slight weight for blockers
+    return dist + blocksIn * 0.65;
+  }
+
+  // Min-heap
+  function Heap(){
+    this.f = [];
+    this.g = [];
+    this.id = [];
+    this.h = [];
+  }
+  Heap.prototype.size = function(){ return this.f.length; };
+  Heap.prototype.push = function(f,g,id,h){
+    const F=this.f, G=this.g, I=this.id, Hh=this.h;
+    let i = F.length;
+    F.push(f); G.push(g); I.push(id); Hh.push(h);
+    while(i>0){
+      const p = (i-1)>>1;
+      if (F[p] <= f) break;
+      // swap
+      F[i]=F[p]; G[i]=G[p]; I[i]=I[p]; Hh[i]=Hh[p];
+      F[p]=f;    G[p]=g;    I[p]=id;   Hh[p]=h;
+      i=p;
+    }
+  };
+  Heap.prototype.pop = function(){
+    const F=this.f, G=this.g, I=this.id, Hh=this.h;
+    const n = F.length;
+    if (!n) return null;
+    const rf=F[0], rg=G[0], rid=I[0], rh=Hh[0];
+
+    const lf=F.pop(), lg=G.pop(), lid=I.pop(), lh=Hh.pop();
+    if (n>1){
+      let i=0;
+      F[0]=lf; G[0]=lg; I[0]=lid; Hh[0]=lh;
+      while(true){
+        let l=i*2+1, r=l+1, s=i;
+        if (l<F.length && F[l]<F[s]) s=l;
+        if (r<F.length && F[r]<F[s]) s=r;
+        if (s===i) break;
+        // swap
+        const tf=F[i], tg=G[i], tid=I[i], th=Hh[i];
+        F[i]=F[s]; G[i]=G[s]; I[i]=I[s]; Hh[i]=Hh[s];
+        F[s]=tf;   G[s]=tg;   I[s]=tid;  Hh[s]=th;
+        i=s;
+      }
+    }
+    return {f:rf,g:rg,id:rid,h:rh};
+  };
+
+  // Solve Weighted A*
+  const weight = 1.95;                  // 速さ優先
+  const EXPAND_LIMIT = 2200000;         // phoneでも耐える範囲
+  const TIME_LIMIT_MS = 28000;          // 28s（worker）
+  const PROGRESS_EVERY = 5000;
+
+  const t0 = Date.now();
+  let expanded = 0;
+
+  const startH = heuristic(start);
+  const heap = new Heap();
+  heap.push(0 + weight*startH, 0, 0, startH);
+
+  // node storage
+  const states = [start];
+  const parents = [-1];
+  const moves = [-1]; // packed move for node (pieceIdx<<2 | dir)
+
+  const gBest = new Map();
+  const keyStart = keyOf(start);
+  gBest.set(keyStart, 0);
+
+  function isGoal(st){
+    return st[mainIdx*2] === 0 && st[mainIdx*2+1] === 0;
+  }
+
+  function reconstruct(goalId){
+    const path = [];
+    let cur = goalId;
+    while (parents[cur] !== -1){
+      path.push(moves[cur]);
+      cur = parents[cur];
+    }
+    path.reverse();
+    return path;
+  }
+
+  // Direction order: mainは左/上を優先（ゴール方向）
+  const DIRS = [
+    {dx:-1,dy:0}, {dx:0,dy:-1}, {dx:1,dy:0}, {dx:0,dy:1}
+  ];
+
+  while(true){
+    const node = heap.pop();
+    if (!node){
+      self.postMessage({type:"fail", reason:"open_empty", expanded: expanded});
+      return;
+    }
+
+    const sid = node.id;
+    const st = states[sid];
+    const k = keyOf(st);
+    const g = node.g;
+
+    const bestG = gBest.get(k);
+    if (bestG !== g) continue;
+
+    if (isGoal(st)){
+      const path = reconstruct(sid);
+      self.postMessage({type:"done", moves: path, minLen: path.length});
+      return;
+    }
+
+    expanded++;
+    if (expanded % PROGRESS_EVERY === 0){
+      self.postMessage({
+        type:"progress",
+        phase:"A*",
+        expanded: expanded,
+        open: heap.size(),
+        bestH: node.h
+      });
+    }
+    if (expanded > EXPAND_LIMIT){
+      self.postMessage({type:"fail", reason:"expand_limit", expanded: expanded});
+      return;
+    }
+    if (Date.now() - t0 > TIME_LIMIT_MS){
+      self.postMessage({type:"fail", reason:"time_limit", expanded: expanded});
+      return;
+    }
+
+    // occupancy
+    const occ = (function(){
+      let o=0;
+      for (let i=0;i<N;i++){
+        const x=st[i*2], y=st[i*2+1];
+        o |= MASK[i][y*COLS + x];
+      }
+      return o>>>0;
+    })();
+
+    for (let i=0;i<N;i++){
+      const cx = st[i*2], cy = st[i*2+1];
+      const w = W[i], h = H[i];
+      const curMask = MASK[i][cy*COLS + cx];
+      const occWo = (occ ^ curMask) >>> 0;
+
+      // main priority dir
+      const dirList = (i===mainIdx) ? DIRS : DIRS;
+
+      for (let di=0;di<4;di++){
+        const d = dirList[di];
+        const nx = cx + d.dx;
+        const ny = cy + d.dy;
+
+        if (nx < 0 || ny < 0 || nx + w > COLS || ny + h > ROWS) continue;
+        const newMask = MASK[i][ny*COLS + nx];
+        if (newMask === 0) continue;
+        if ((occWo & newMask) !== 0) continue;
+
+        const ns = new Int8Array(st);
+        ns[i*2] = nx;
+        ns[i*2+1] = ny;
+
+        const nk = keyOf(ns);
+        const ng = g + 1;
+
+        const prev = gBest.get(nk);
+        if (prev !== undefined && prev <= ng) continue;
+
+        gBest.set(nk, ng);
+
+        const nh = heuristic(ns);
+        const nf = ng + weight * nh;
+
+        const nid = states.length;
+        states.push(ns);
+        parents.push(sid);
+
+        // pack move: pieceIdx<<2 | dirCode(0:L 1:U 2:R 3:D)
+        let dirCode = 0;
+        if (d.dx===-1 && d.dy===0) dirCode=0;
+        else if (d.dx===0 && d.dy===-1) dirCode=1;
+        else if (d.dx===1 && d.dy===0) dirCode=2;
+        else dirCode=3;
+
+        moves.push((i<<2) | dirCode);
+
+        heap.push(nf, ng, nid, nh);
+      }
+    }
+  }
+};`;
+
+    const blob = new Blob([workerScript], { type:"application/javascript" });
+    return new Worker(URL.createObjectURL(blob));
+  }
+
+  /* =========================================================
+   *  イベント
+   * ========================================================= */
+  modePromoteBtn.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    switchMode("promote");
+  });
+  modeChampBtn.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    switchMode("champ");
+  });
+
+  undoBtn.addEventListener("click", () => { ensureAudio(); playClickSE(); undo(); });
+  redoBtn.addEventListener("click", () => { ensureAudio(); playClickSE(); redo(); });
+  resetBtn.addEventListener("click", () => { ensureAudio(); playClickSE(); resetToStart(); });
+  clearBestBtn.addEventListener("click", () => { ensureAudio(); playClickSE(); clearRecords(); });
+
+  solveBtn.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    startSolver();
+  });
+
+  solverCancel.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    stopSolver();
+  });
+
+  // sound
+  bgmToggle.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    bgmOn = !bgmOn;
+    localStorage.setItem(LS.bgmOn, bgmOn ? "1" : "0");
+    updateSoundUI();
+    if (bgmOn){
+      startBGM();
+    }else{
+      stopBGM();
+    }
+  });
+
+  seToggle.addEventListener("click", () => {
+    ensureAudio();
+    playClickSE();
+    seOn = !seOn;
+    localStorage.setItem(LS.seOn, seOn ? "1" : "0");
+    updateSoundUI();
+  });
+
+  bgmVolSlider.addEventListener("input", () => {
+    ensureAudio();
+    bgmVol = parseInt(bgmVolSlider.value, 10);
+    localStorage.setItem(LS.bgmVol, String(bgmVol));
+    updateSoundUI();
+  });
+
+  seVolSlider.addEventListener("input", () => {
+    ensureAudio();
+    seVol = parseInt(seVolSlider.value, 10);
+    localStorage.setItem(LS.seVol, String(seVol));
+    updateSoundUI();
+  });
+
+  // window resize => fix board alignment
+  window.addEventListener("resize", () => {
+    fitBoardToScreen();
+    resizeConfetti();
+  });
+
+  // first interaction unlock
+  window.addEventListener("pointerdown", () => {
+    ensureAudio();
+    if (bgmOn) startBGM();
   }, { once:true });
-}
-init();
+
+  /* =========================================================
+   *  起動（リロード直後から表示）
+   * ========================================================= */
+  function loadSettings(){
+    currentMode = localStorage.getItem(LS.mode) || "promote";
+
+    bgmOn = (localStorage.getItem(LS.bgmOn) || "0") === "1";
+    seOn  = (localStorage.getItem(LS.seOn)  || "1") === "1";
+
+    const bv = parseInt(localStorage.getItem(LS.bgmVol) || "5", 10);
+    const sv = parseInt(localStorage.getItem(LS.seVol)  || "5", 10);
+    bgmVol = isNaN(bv) ? 5 : Math.max(0, Math.min(10, bv));
+    seVol  = isNaN(sv) ? 5 : Math.max(0, Math.min(10, sv));
+
+    updateSoundUI();
+  }
+
+  function init(){
+    loadSettings();
+    switchMode(currentMode);
+
+    // 盤面ズレ対策（初期描画後にもう一度フィット）
+    setTimeout(() => {
+      fitBoardToScreen();
+    }, 50);
+  }
+
+  init();
+})();
 </script>
 </body>
 </html>
