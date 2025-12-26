@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>アイシテルニイガタパズル</title>
+  <style>
+    :root{
+      --bg:#f4f4f4;
+      --wood:#8b5a2b;
+      --wood2:#dcb386;
+      --accent:#d32f2f;
+      --text:#333;
+      --shadow: rgba(0,0,0,.18);
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+      margin:0; padding:14px 0 28px;
+      background:var(--bg);
+      color:var(--text);
+      display:flex; flex-direction:column; align-items:center;
+      min-height:100vh;
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
+      overflow-x:hidden;
+    }
+    h1{margin:0 0 10px; font-size:22px; color:#444}
+
+    /* sound */
+    .sound-controls{
+      display:flex; gap:12px; margin:0 0 10px;
+    }
+    .sound-btn{
+      background:#fff; border:1px solid #aaa; border-radius:18px;
+      padding:6px 12px; font-size:12px; color:#777;
+      display:flex; align-items:center; gap:6px;
+      cursor:pointer;
+      transition:.15s;
+    }
+    .sound-btn.active{
+      background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700;
+    }
+
+    /* mode */
+    .mode-selector{
+      display:flex; width:90%; max-width:360px;
+      background:#ddd; border-radius:8px; padding:4px;
+      margin-bottom:10px;
+    }
+    .mode-btn{
+      flex:1; border:none; background:transparent; cursor:pointer;
+      padding:8px 0; border-radius:6px;
+      font-size:14px; font-weight:800; color:#666;
+      transition:.15s;
+    }
+    .mode-btn.active{
+      background:#fff; color:var(--accent);
+      box-shadow:0 2px 4px rgba(0,0,0,.10);
+    }
+
+    /* score */
+    #score-board{
+      display:flex; justify-content:space-between;
+      width:85%; max-width:340px;
+      font-weight:800; font-size:15px; color:#555;
+      margin-bottom:6px;
+      z-index:50;
+    }
+    .score-item span{color:var(--accent); font-size:18px; margin-left:5px}
+
+    /* board wrapper */
+    #board-wrapper{position:relative; margin:35px auto 20px}
+    #board-container{
+      position:absolute; inset:0 auto auto 0;
+      width:360px; height:300px;
+      background:var(--wood2);
+      padding:10px;
+      border:4px solid var(--wood);
+      border-radius:6px;
+      box-shadow:0 5px 15px rgba(0,0,0,.22);
+      transform-origin:top left;
+    }
+    #goal-marker{
+      position:absolute;
+      top:-25px; left:10px; width:240px;
+      text-align:left;
+      font-size:14px; font-weight:900;
+      color:var(--wood);
+      white-space:nowrap;
+    }
+    #game-board{
+      position:relative;
+      width:360px; height:300px;
+      border:2px solid var(--wood);
+      overflow:hidden;
+      background-color:#111;
+      background-image:
+        linear-gradient(45deg,#222 25%,transparent 25%),
+        linear-gradient(-45deg,#222 25%,transparent 25%),
+        linear-gradient(45deg,transparent 75%,#222 75%),
+        linear-gradient(-45deg,transparent 75%,#222 75%);
+      background-size:20px 20px;
+    }
+
+    /* blocks */
+    .block{
+      position:absolute;
+      border:2px solid var(--wood);
+      border-radius:3px;
+      box-shadow:inset 0 0 6px rgba(0,0,0,.12);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900;
+      cursor:pointer;
+      transition:top .10s ease-out, left .10s ease-out, transform .08s;
+      z-index:10;
+      text-shadow:0 1px 0 rgba(0,0,0,.15);
+    }
+    .block.selected{
+      outline:2px solid rgba(255,255,255,.9);
+      outline-offset:-2px;
+      z-index:20;
+      transform:translateZ(0) scale(1.01);
+    }
+    .block.auto{
+      outline:2px solid rgba(0,137,123,.9);
+      outline-offset:-2px;
+      z-index:25;
+    }
+
+    .vertical{ writing-mode:vertical-rl; text-orientation:upright; letter-spacing:1px; }
+    .horizontal{ writing-mode:horizontal-tb; letter-spacing:0; }
+
+    .block-id{
+      position:absolute; top:1px; left:2px;
+      font-size:9px; opacity:.70;
+      writing-mode:horizontal-tb;
+      pointer-events:none;
+    }
+
+    /* arrows */
+    .arrow-btn{
+      position:absolute;
+      width:40px; height:40px;
+      background:var(--accent);
+      color:#fff;
+      border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px;
+      box-shadow:0 2px 6px rgba(0,0,0,.3);
+      opacity:.96;
+      z-index:30;
+      cursor:pointer;
+    }
+    .arrow-btn:active{transform:scale(.9); background:#b71c1c}
+    .arrow-top{ top:-15px; left:50%; margin-left:-20px; }
+    .arrow-bottom{ bottom:-15px; left:50%; margin-left:-20px; }
+    .arrow-left{ left:-15px; top:50%; margin-top:-20px; }
+    .arrow-right{ right:-15px; top:50%; margin-top:-20px; }
+
+    /* controls */
+    .primary-controls{
+      display:flex; gap:15px; width:90%; max-width:360px;
+      margin-bottom:10px;
+    }
+    .history-btn{
+      flex:1; height:54px;
+      font-size:18px; font-weight:900;
+      border-radius:10px;
+      background:#fff;
+      border:2px solid #888;
+      box-shadow:0 4px 0 #bbb;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:.08s;
+    }
+    .history-btn:active{transform:translateY(4px); box-shadow:none}
+    .history-btn:disabled{
+      background:#eee; border-color:#ccc; color:#aaa;
+      box-shadow:none; transform:none; cursor:not-allowed;
+    }
+
+    .solver-area{
+      width:90%; max-width:360px;
+      margin-bottom:auto;
+    }
+    .solve-btn{
+      width:100%;
+      padding:12px;
+      font-size:16px; font-weight:900;
+      border:none; border-radius:8px;
+      background:#4caf50; color:#fff;
+      box-shadow:0 4px 0 #388e3c;
+      cursor:pointer; transition:.08s;
+    }
+    .solve-btn:active{transform:translateY(4px); box-shadow:none}
+    .solve-btn.solving{background:#ef5350; box-shadow:0 4px 0 #c62828}
+
+    .danger-zone{
+      margin-top:30px;
+      width:100%;
+      padding:15px 0 20px;
+      border-top:1px solid #ddd;
+      background:#eaeaea;
+      display:flex; flex-direction:column; align-items:center; gap:10px;
+    }
+    .danger-desc{font-size:11px; color:#777}
+    .secondary-btn-group{display:flex; gap:20px}
+    .secondary-btn{
+      background:#fff;
+      border:1px solid #999;
+      color:#555;
+      padding:8px 20px;
+      font-size:13px;
+      border-radius:20px;
+      cursor:pointer;
+    }
+    .secondary-btn:active{background:#ddd}
+
+    /* overlay */
+    #loading-overlay{
+      display:none;
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.6);
+      z-index:100;
+      color:#fff;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+    }
+    .spinner{
+      width:40px; height:40px;
+      border:4px solid #fff; border-top:4px solid transparent;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+      margin-bottom:14px;
+    }
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <h1 id="game-title">アイシテルニイガタパズル</h1>
+
+  <div class="sound-controls">
+    <button id="btn-bgm" class="sound-btn" onclick="toggleBGM()"><span>♪</span> BGM: OFF</button>
+    <button id="btn-se" class="sound-btn active" onclick="toggleSE()"><span>🔊</span> 効果音: ON</button>
+  </div>
+
+  <div class="mode-selector">
+    <button id="btn-mode1" class="mode-btn active" onclick="switchMode('mode1')">J1昇格</button>
+    <button id="btn-mode2" class="mode-btn" onclick="switchMode('mode2')">J1優勝</button>
+  </div>
+
+  <div id="score-board">
+    <div class="score-item">手数: <span id="current-moves">0</span></div>
+    <div class="score-item">最少: <span id="best-score">-</span></div>
+  </div>
+
+  <div id="board-wrapper">
+    <div id="board-container">
+      <div id="goal-marker">▼ J1昇格 ▼</div>
+      <div id="game-board"></div>
+    </div>
+  </div>
+
+  <div class="primary-controls">
+    <button id="btn-undo" class="history-btn" onclick="undoMove()" disabled>↩ 戻る</button>
+    <button id="btn-redo" class="history-btn" onclick="redoMove()" disabled>進む ↪</button>
+  </div>
+
+  <div class="solver-area">
+    <button id="btn-solve" class="solve-btn" onclick="toggleSolver()">模範解答を計算 (自動再生)</button>
+  </div>
+
+  <div class="danger-zone">
+    <span class="danger-desc">設定・リセット（誤操作防止エリア）</span>
+    <div class="secondary-btn-group">
+      <button class="secondary-btn" onclick="resetGame()">最初に戻す</button>
+      <button class="secondary-btn" onclick="clearBestScore()">記録消去</button>
+    </div>
+  </div>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div style="font-weight:900;">解を探索中...</div>
+    <div style="font-size:12px; margin-top:6px; opacity:.9;">※端末によっては数秒〜数十秒かかる場合があります</div>
+  </div>
+
+<script>
+/* =========================================================
+   CONSTANTS
+   ========================================================= */
+const COLS=6, ROWS=5, UNIT=60;
+
+const STORAGE_KEY = {
+  mode1: 'puzzle_mode1_best',
+  mode2: 'puzzle_mode2_best'
+};
+
+const MODE_META = {
+  mode1: { label:'J1昇格' },
+  mode2: { label:'J1優勝' }
+};
+
+/* =========================================================
+   TEAM COLORS (approx primary)
+   ※ 色だけ変更：ゲーム仕様には影響しません
+   ========================================================= */
+const TEAM_COLOR = {
+  // 共通
+  "新潟":"#f39800",
+
+  // mode1
+  "横浜FC":"#5bb6e5",
+  "湘南":"#1b8f3a",
+  "徳島":"#005bac",
+  "磐田":"#7fc5e8",
+  "大宮":"#ff6a00",
+  "仙台":"#f2b000",
+  "鳥栖":"#e91e63",
+  "いわき":"#d50000",
+  "山形":"#1a4aa5",
+  "今治":"#003f7d",
+  "札幌":"#c62828",
+  "甲府":"#003399",
+  "秋田":"#0044aa",
+  "藤枝":"#6a1b9a",
+
+  // mode2
+  "鹿島":"#b71c1c",
+  "柏":"#ffd600",
+  "京都":"#5e2b97",
+  "広島":"#6a1b9a",
+  "神戸":"#b71c1c",
+  "町田":"#0b3a8d",
+  "浦和":"#d50000",
+  "川崎":"#00a0e9",
+  "G大阪":"#005bac",
+  "C大阪":"#e91e63",
+  "F東京":"#0b2d6b",
+  "福岡":"#005bac",
+  "岡山":"#8b0000"
+};
+
+function textColorFor(bg){
+  // simple luminance
+  const c = bg.replace('#','');
+  const r = parseInt(c.substr(0,2),16)/255;
+  const g = parseInt(c.substr(2,2),16)/255;
+  const b = parseInt(c.substr(4,2),16)/255;
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  return lum < 0.55 ? '#fff' : '#111';
+}
+
+/* =========================================================
+   SOUND (WebAudio) - 16-step simple loop, FC sports-game-ish
+   ========================================================= */
+const Sound = {
+  ctx:null,
+  bgmEnabled:false,
+  seEnabled:true,
+  isBgmPlaying:false,
+  nextNoteTime:0,
+  timer:null,
+  stepIndex:0,
+
+  init(){
+    if(!this.ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+    }
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+  },
+
+  playMove(){
+    if(!this.seEnabled) return;
+    this.init();
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.09);
+    gain.gain.setValueAtTime(0.28, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.09);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.10);
+  },
+
+  playWin(){
+    if(!this.seEnabled) return;
+    this.init();
+    const base = this.ctx.currentTime;
+    const freqs = [523.25, 587.33, 698.46, 783.99, 1046.50];
+    freqs.forEach((f, i)=>{
+      const t = base + i*0.10;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.0, t);
+      gain.gain.linearRampToValueAtTime(0.20, t+0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, t+1.0);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(t);
+      osc.stop(t+1.3);
+    });
+  },
+
+  // 16-step loop (single tone). 0 = rest
+  _pattern16(){
+    // simple repeating phrase: feels like old sports game menu BGM
+    return [
+      392, 440, 392, 349,
+      392,   0, 330, 349,
+      392, 440, 392, 349,
+      330,   0, 294,   0
+    ];
+  },
+
+  startBGM(){
+    if(!this.bgmEnabled) return;
+    this.init();
+    if(this.isBgmPlaying) return;
+    this.isBgmPlaying = true;
+    this.nextNoteTime = this.ctx.currentTime + 0.12;
+    this._schedule();
+  },
+
+  stopBGM(){
+    this.isBgmPlaying = false;
+    if(this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  },
+
+  _schedule(){
+    if(!this.isBgmPlaying) return;
+    while(this.nextNoteTime < this.ctx.currentTime + 0.5){
+      this._playBgmStep(this.nextNoteTime);
+      this.nextNoteTime += 0.25; // 16 steps -> 4 beats if 0.25s/step
+    }
+    this.timer = setTimeout(()=>this._schedule(), 90);
+  },
+
+  _playBgmStep(time){
+    const notes = this._pattern16();
+    const freq = notes[this.stepIndex++ % 16];
+    if(freq <= 0) return;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+
+    gain.gain.setValueAtTime(0.07, time);
+    gain.gain.exponentialRampToValueAtTime(0.01, time+0.22);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(time);
+    osc.stop(time+0.24);
+  }
+};
+
+function loadSoundSettings(){
+  const bgm = localStorage.getItem('puzzle_bgm');
+  const se  = localStorage.getItem('puzzle_se');
+  Sound.bgmEnabled = (bgm === 'on');
+  Sound.seEnabled  = (se !== 'off'); // default ON
+  updateSoundUI();
+}
+
+function updateSoundUI(){
+  const btnBGM = document.getElementById('btn-bgm');
+  const btnSE  = document.getElementById('btn-se');
+
+  if(Sound.bgmEnabled){
+    btnBGM.classList.add('active');
+    btnBGM.innerHTML = '<span>♪</span> BGM: ON';
+  }else{
+    btnBGM.classList.remove('active');
+    btnBGM.innerHTML = '<span>♪</span> BGM: OFF';
+  }
+  if(Sound.seEnabled){
+    btnSE.classList.add('active');
+    btnSE.innerHTML = '<span>🔊</span> 効果音: ON';
+  }else{
+    btnSE.classList.remove('active');
+    btnSE.innerHTML = '<span>🔈</span> 効果音: OFF';
+  }
+}
+
+function toggleBGM(){
+  Sound.init();
+  Sound.bgmEnabled = !Sound.bgmEnabled;
+  localStorage.setItem('puzzle_bgm', Sound.bgmEnabled ? 'on' : 'off');
+  if(Sound.bgmEnabled) Sound.startBGM(); else Sound.stopBGM();
+  updateSoundUI();
+}
+
+function toggleSE(){
+  Sound.init();
+  Sound.seEnabled = !Sound.seEnabled;
+  localStorage.setItem('puzzle_se', Sound.seEnabled ? 'on' : 'off');
+  if(Sound.seEnabled) Sound.playMove();
+  updateSoundUI();
+}
+
+/* =========================================================
+   LAYOUTS (positions only; names/colors assigned by rule)
+   - Board: 6x5
+   - Empty: 2
+   - Main: 2x2 at (4,3)
+   ========================================================= */
+const TEAM_LIST = {
+  mode1: [
+    "新潟",
+    "横浜FC","湘南","徳島","磐田","大宮","仙台","鳥栖","いわき","山形","今治","札幌","甲府","秋田","藤枝"
+  ],
+  mode2: [
+    "新潟",
+    "鹿島","柏","京都","広島","神戸","町田","浦和","川崎","G大阪","C大阪","F東京","福岡","岡山"
+  ]
+};
+
+// MODE1: 15 blocks = main(2x2) + V(1x2)*5 + H(2x1)*5 + S(1x1)*4
+// (positions are changed from市販配置, and solvable)
+const layout = {
+  mode1: [
+    // vertical 1x2 (5)
+    { id: 1, w:1, h:2, x:0, y:1, dir:"v" },
+    { id: 2, w:1, h:2, x:1, y:1, dir:"v" },
+    { id: 3, w:1, h:2, x:4, y:0, dir:"v" },
+    { id: 4, w:1, h:2, x:5, y:0, dir:"v" },
+    { id: 5, w:1, h:2, x:2, y:1, dir:"v" },
+
+    // horizontal 2x1 (5)
+    { id: 6, w:2, h:1, x:2, y:0, dir:"h" },
+    { id: 7, w:2, h:1, x:0, y:0, dir:"h" },
+    { id: 8, w:2, h:1, x:2, y:3, dir:"h" },
+    { id: 9, w:2, h:1, x:0, y:3, dir:"h" },
+    { id:10, w:2, h:1, x:0, y:4, dir:"h" },
+
+    // single 1x1 (4)
+    { id:11, w:1, h:1, x:3, y:1, dir:"v" },
+    { id:12, w:1, h:1, x:3, y:2, dir:"v" },
+    { id:13, w:1, h:1, x:2, y:4, dir:"v" },
+    { id:14, w:1, h:1, x:3, y:4, dir:"v" },
+
+    // main 2x2 (1)
+    { id:99, w:2, h:2, x:4, y:3, dir:"v", isMain:true }
+  ],
+
+  // MODE2: 14 blocks = main(2x2) + V(1x2)*4 + H(2x1)*7 + S(1x1)*2
+  // (constructed by shape-transform from solvable state; solvable)
+  mode2: [
+    // vertical 1x2 (4)
+    { id: 1, w:1, h:2, x:0, y:1, dir:"v" },
+    { id: 2, w:1, h:2, x:1, y:1, dir:"v" },
+    { id: 3, w:1, h:2, x:4, y:0, dir:"v" },
+    { id: 4, w:1, h:2, x:5, y:0, dir:"v" },
+
+    // horizontal 2x1 (7)
+    { id: 5, w:2, h:1, x:0, y:0, dir:"h" },
+    { id: 6, w:2, h:1, x:0, y:4, dir:"h" },
+    { id: 7, w:2, h:1, x:2, y:0, dir:"h" },
+    { id: 8, w:2, h:1, x:2, y:3, dir:"h" },
+    { id: 9, w:2, h:1, x:0, y:3, dir:"h" },
+    { id:10, w:2, h:1, x:2, y:1, dir:"h" },
+    { id:11, w:2, h:1, x:2, y:2, dir:"h" },
+
+    // single 1x1 (2)
+    { id:12, w:1, h:1, x:2, y:4, dir:"v" },
+    { id:13, w:1, h:1, x:3, y:4, dir:"v" },
+
+    // main 2x2 (1)
+    { id:99, w:2, h:2, x:4, y:3, dir:"v", isMain:true }
+  ]
+};
+
+/* =========================================================
+   DOM
+   ========================================================= */
+const el = {
+  board: document.getElementById('game-board'),
+  moves: document.getElementById('current-moves'),
+  best:  document.getElementById('best-score'),
+  btn1:  document.getElementById('btn-mode1'),
+  btn2:  document.getElementById('btn-mode2'),
+  undo:  document.getElementById('btn-undo'),
+  redo:  document.getElementById('btn-redo'),
+  solve: document.getElementById('btn-solve'),
+  overlay: document.getElementById('loading-overlay'),
+  goal: document.getElementById('goal-marker')
+};
+
+let mode = 'mode1';
+let blocks = [];
+let moveCount = 0;
+let selected = -1;
+
+let undoStack = [];
+let redoStack = [];
+
+let isAuto = false;
+let autoMoves = [];
+let autoTimer = null;
+
+/* =========================================================
+   UTIL
+   ========================================================= */
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+function fitBoard(){
+  const wrapper = document.getElementById('board-wrapper');
+  const container = document.getElementById('board-container');
+  const baseW = 388, baseH = 355;
+  const screenW = window.innerWidth - 24;
+  const screenH = window.innerHeight * 0.55;
+
+  let scale = screenW / baseW;
+  if(baseH * scale > screenH) scale = screenH / baseH;
+  if(scale > 1.3) scale = 1.3;
+
+  container.style.transform = `scale(${scale})`;
+  wrapper.style.width = `${baseW * scale}px`;
+  wrapper.style.height = `${baseH * scale}px`;
+}
+window.addEventListener('load', fitBoard);
+window.addEventListener('resize', fitBoard);
+
+function getBestKey(){ return STORAGE_KEY[mode]; }
+
+function loadBest(){
+  const v = localStorage.getItem(getBestKey());
+  el.best.textContent = v ? v : '-';
+}
+function saveBest(score){
+  const key = getBestKey();
+  const cur = localStorage.getItem(key);
+  if(!cur || score < parseInt(cur,10)){
+    localStorage.setItem(key, String(score));
+    el.best.textContent = String(score);
+  }
+}
+function clearBestScore(){
+  if(confirm('現在のモードの記録を消去しますか？')){
+    localStorage.removeItem(getBestKey());
+    el.best.textContent = '-';
+  }
+}
+
+function setGoalMarker(){
+  el.goal.textContent = `▼ ${MODE_META[mode].label} ▼`;
+}
+
+/* =========================================================
+   MODE SWITCH / RESET
+   ========================================================= */
+function switchMode(next){
+  stopAuto();
+  mode = next;
+
+  if(mode === 'mode1'){ el.btn1.classList.add('active'); el.btn2.classList.remove('active'); }
+  else { el.btn1.classList.remove('active'); el.btn2.classList.add('active'); }
+
+  setGoalMarker();
+  loadBest();
+  resetGame();
+}
+
+function assignNamesAndColors(){
+  const list = TEAM_LIST[mode].slice(); // [main, others...]
+  const mainName = list[0];
+
+  // assign main first
+  const main = blocks.find(b=>b.isMain);
+  main.name = mainName;
+  main.color = TEAM_COLOR[mainName] || '#999';
+  main.textColor = textColorFor(main.color);
+
+  // other blocks: sort by closeness to goal (x+y)
+  const others = blocks
+    .map((b, idx)=>({b, idx}))
+    .filter(o=>!o.b.isMain)
+    .sort((a,c)=>{
+      const da = a.b.x + a.b.y;
+      const dc = c.b.x + c.b.y;
+      if(da!==dc) return da-dc;
+      // tie-breaker: smaller y then x
+      if(a.b.y!==c.b.y) return a.b.y-c.b.y;
+         return a.b.x-c.b.x;
+    });
+
+  // names list without main
+  const names = list.slice(1);
+  for(let i=0;i<others.length;i++){
+    const name = names[i] || `TEAM${i+1}`;
+    others[i].b.name = name;
+    const col = TEAM_COLOR[name] || '#888';
+    others[i].b.color = col;
+    others[i].b.textColor = textColorFor(col);
+  }
+}
+
+function resetGame(){
+  stopAuto();
+  blocks = deepCopy(layout[mode]);
+  moveCount = 0;
+  selected = -1;
+  undoStack = [];
+  redoStack = [];
+  assignNamesAndColors();
+  updateHud();
+  render();
+}
+
+/* =========================================================
+   HUD
+   ========================================================= */
+function updateHud(){
+  el.moves.textContent = String(moveCount);
+  el.undo.disabled = (undoStack.length === 0) || isAuto;
+  el.redo.disabled = (redoStack.length === 0) || isAuto;
+}
+
+/* =========================================================
+   MOVES / COLLISION
+   ========================================================= */
+function getValidMovesFor(index){
+  const b = blocks[index];
+  const dirs = [
+    {dx:0, dy:-1, cls:'arrow-top',    ch:'&#9650;'},
+    {dx:0, dy: 1, cls:'arrow-bottom', ch:'&#9660;'},
+    {dx:-1,dy: 0, cls:'arrow-left',   ch:'&#9664;'},
+    {dx: 1,dy: 0, cls:'arrow-right',  ch:'&#9654;'}
+  ];
+  return dirs.filter(d => canMove(b, d.dx, d.dy));
+}
+
+function canMove(block, dx, dy){
+  const nx = block.x + dx;
+  const ny = block.y + dy;
+  if(nx < 0 || nx + block.w > COLS) return false;
+  if(ny < 0 || ny + block.h > ROWS) return false;
+
+  for(const o of blocks){
+    if(o === block) continue;
+    if(nx < o.x + o.w && nx + block.w > o.x &&
+       ny < o.y + o.h && ny + block.h > o.y){
+      return false;
+    }
+  }
+  return true;
+}
+
+function applyMove(idx, dx, dy){
+  blocks[idx].x += dx;
+  blocks[idx].y += dy;
+}
+
+function doMove(idx, dx, dy, {record=true, sound=true}={}){
+  if(sound) Sound.playMove();
+  applyMove(idx, dx, dy);
+  moveCount++;
+  if(record){
+    undoStack.push({index:idx, dx, dy});
+    redoStack = [];
+  }
+  selected = -1;
+  updateHud();
+  render();
+  setTimeout(checkWin, 80);
+}
+
+function undoMove(){
+  if(undoStack.length === 0 || isAuto) return;
+  Sound.playMove();
+  const m = undoStack.pop();
+  applyMove(m.index, -m.dx, -m.dy);
+  redoStack.push(m);
+  moveCount--;
+  selected = -1;
+  updateHud();
+  render();
+}
+
+function redoMove(){
+  if(redoStack.length === 0 || isAuto) return;
+  Sound.playMove();
+  const m = redoStack.pop();
+  applyMove(m.index, m.dx, m.dy);
+  undoStack.push(m);
+  moveCount++;
+  selected = -1;
+  updateHud();
+  render();
+  setTimeout(checkWin, 80);
+}
+
+function checkWin(){
+  const main = blocks.find(b=>b.isMain);
+  if(main && main.x === 0 && main.y === 0){
+    if(isAuto) stopAuto();
+    Sound.playWin();
+    setTimeout(()=>{
+      alert(`${MODE_META[mode].label} 達成！\n移動回数: ${moveCount}回`);
+      saveBest(moveCount);
+    }, 450);
+  }
+}
+
+/* =========================================================
+   RENDER / TAP
+   ========================================================= */
+function render(){
+  el.board.innerHTML = '';
+  blocks.forEach((b, i)=>{
+    const d = document.createElement('div');
+    d.className = 'block';
+    if(i === selected) d.classList.add('selected');
+    if(isAuto && i === selected) d.classList.add('auto');
+
+    d.style.width  = (b.w*UNIT)+'px';
+    d.style.height = (b.h*UNIT)+'px';
+    d.style.left   = (b.x*UNIT)+'px';
+    d.style.top    = (b.y*UNIT)+'px';
+
+    d.style.background = b.color || '#ddd';
+    d.style.color = b.textColor || '#111';
+
+    d.classList.add(b.dir === 'v' ? 'vertical' : 'horizontal');
+
+    // font size tuning (keep original behavior)
+    if(b.isMain) d.style.fontSize = '40px';
+    else if((b.name||'').length <= 2) d.style.fontSize = '22px';
+    else if((b.name||'').length >= 4) d.style.fontSize = '16px';
+    else d.style.fontSize = '19px';
+
+    const id = document.createElement('span');
+    id.className = 'block-id';
+    id.textContent = b.id;
+    d.appendChild(id);
+    d.appendChild(document.createTextNode(b.name || ''));
+
+    if(!isAuto){
+      d.onclick = (e)=>{
+        Sound.init(); // mobile unlock
+        e.stopPropagation();
+        onBlockTap(i);
+      };
+
+      if(i === selected){
+        const moves = getValidMovesFor(i);
+        moves.forEach(m=>{
+          const a = document.createElement('div');
+          a.className = `arrow-btn ${m.cls}`;
+          a.innerHTML = m.ch;
+          a.onclick = (e)=>{
+            e.stopPropagation();
+            doMove(i, m.dx, m.dy);
+          };
+          d.appendChild(a);
+        });
+      }
+    }
+    el.board.appendChild(d);
+  });
+}
+
+function onBlockTap(i){
+  if(isAuto) return;
+  if(selected === i){
+    selected = -1; render(); return;
+  }
+  const moves = getValidMovesFor(i);
+  if(moves.length === 0) return;
+  if(moves.length === 1){
+    doMove(i, moves[0].dx, moves[0].dy);
+    return;
+  }
+  selected = i;
+  render();
+}
+
+document.body.addEventListener('click', ()=>{
+  if(isAuto) return;
+  if(selected !== -1){
+    selected = -1;
+    render();
+  }
+});
+
+/* =========================================================
+   SOLVER (TYPE-B algorithm via Web Worker)
+   ========================================================= */
+let solverWorker = null;
+
+function toggleSolver(){
+  if(isAuto) stopAuto();
+  else startSolver();
+}
+
+function stopAuto(){
+  isAuto = false;
+  if(autoTimer) clearInterval(autoTimer);
+  autoTimer = null;
+  el.solve.textContent = '模範解答を計算 (自動再生)';
+  el.solve.classList.remove('solving');
+  selected = -1;
+  updateHud();
+  render();
+}
+
+function ensureWorker(){
+  if(solverWorker) return;
+
+  const workerLines = [
+`let COLS=6, ROWS=5;`,
+`function buildStaticInfo(blocks){ return blocks.map(b=>({w:b.w, h:b.h})); }`,
+`function buildState(blocks){`,
+`  const s = new Int8Array(blocks.length*2);`,
+`  for(let i=0;i<blocks.length;i++){ s[i*2]=blocks[i].x; s[i*2+1]=blocks[i].y; }`,
+`  return s;`,
+`}`,
+`function keyOf(state){`,
+`  let out='';`,
+`  for(let i=0;i<state.length;i++){ out += String.fromCharCode(65 + state[i]); }`,
+`  return out;`,
+`}`,
+`function rectOverlap(ax,ay,aw,ah,bx,by,bw,bh){`,
+`  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;`,
+`}`,
+`function canMoveRaw(idx, dx, dy, state, info){`,
+`  const w = info[idx].w, h = info[idx].h;`,
+`  const cx = state[idx*2], cy = state[idx*2+1];`,
+`  const nx = cx + dx, ny = cy + dy;`,
+`  if(nx < 0 || nx + w > COLS) return false;`,
+`  if(ny < 0 || ny + h > ROWS) return false;`,
+`  const n = info.length;`,
+`  for(let i=0;i<n;i++){`,
+`    if(i===idx) continue;`,
+`    const ox = state[i*2], oy = state[i*2+1];`,
+`    const ow = info[i].w, oh = info[i].h;`,
+`    if(rectOverlap(nx,ny,w,h, ox,oy,ow,oh)) return false;`,
+`  }`,
+`  return true;`,
+`}`,
+`function heuristic(state, mainIdx, info){`,
+`  const mx = state[mainIdx*2];`,
+`  const my = state[mainIdx*2+1];`,
+`  let dist = mx + my;`,
+`  let blockPenalty = 0;`,
+`  const minX = 0, maxX = mx;`,
+`  const minY = 0, maxY = my;`,
+`  for(let i=0;i<info.length;i++){`,
+`    if(i===mainIdx) continue;`,
+`    const x=state[i*2], y=state[i*2+1];`,
+`    const w=info[i].w, h=info[i].h;`,
+`    const inRect = !(x+w-1 < minX || x > maxX || y+h-1 < minY || y > maxY);`,
+`    if(inRect) blockPenalty++;`,
+`  }`,
+`  return dist + blockPenalty*0.6;`,
+`}`,
+`class MinHeap{`,
+`  constructor(){ this.a=[]; }`,
+`  push(x){`,
+`    const a=this.a; a.push(x);`,
+`    let i=a.length-1;`,
+`    while(i>0){`,
+`      const p=(i-1)>>1;`,
+`      if(a[p].f <= a[i].f) break;`,
+`      const t=a[p]; a[p]=a[i]; a[i]=t;`,
+`      i=p;`,
+`    }`,
+`  }`,
+`  pop(){`,
+`    const a=this.a;`,
+`    if(a.length===0) return null;`,
+`    const top=a[0];`,
+`    const last=a.pop();`,
+`    if(a.length){`,
+`      a[0]=last;`,
+`      let i=0;`,
+`      for(;;){`,
+`        const l=i*2+1, r=l+1;`,
+`        let m=i;`,
+`        if(l<a.length && a[l].f < a[m].f) m=l;`,
+`        if(r<a.length && a[r].f < a[m].f) m=r;`,
+`        if(m===i) break;`,
+`        const t=a[m]; a[m]=a[i]; a[i]=t;`,
+`        i=m;`,
+`      }`,
+`    }`,
+`    return top;`,
+`  }`,
+`  get size(){ return this.a.length; }`,
+`}`,
+`async function solveAStar(startBlocks, opt){`,
+`  const info = buildStaticInfo(startBlocks);`,
+`  const mainIdx = startBlocks.findIndex(b=>b.isMain);`,
+`  const startState = buildState(startBlocks);`,
+`  const startKey = keyOf(startState);`,
+`  const gBest = new Map();`,
+`  gBest.set(startKey, 0);`,
+`  const heap = new MinHeap();`,
+`  const h0 = heuristic(startState, mainIdx, info);`,
+`  heap.push({ state:startState, g:0, f:0 + opt.weight*h0, moves:[] });`,
+`  const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];`,
+`  const t0 = performance.now();`,
+`  let expanded = 0;`,
+`  while(heap.size){`,
+`    const now = performance.now();`,
+`    if(now - t0 > opt.timeLimitMs) return null;`,
+`    if(expanded > opt.expandLimit) return null;`,
+`    const node = heap.pop();`,
+`    const st = node.state;`,
+`    if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0){`,
+`      return node.moves;`,
+`    }`,
+`    expanded++;`,
+`    if(expanded % 6000 === 0){`,
+`      await new Promise(r=>setTimeout(r,0));`,
+`    }`,
+`    for(let i=0;i<info.length;i++){`,
+`      for(const d of dirs){`,
+`        if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;`,
+`        const ns = new Int8Array(st);`,
+`        ns[i*2]   += d.dx;`,
+`        ns[i*2+1] += d.dy;`,
+`        const nk = keyOf(ns);`,
+`        const ng = node.g + 1;`,
+`        const prev = gBest.get(nk);`,
+`        if(prev !== undefined && prev <= ng) continue;`,
+`        gBest.set(nk, ng);`,
+`        const nh = heuristic(ns, mainIdx, info);`,
+`        const nf = ng + opt.weight * nh;`,
+`        heap.push({`,
+`          state: ns,`,
+`          g: ng,`,
+`          f: nf,`,
+`          moves: node.moves.concat({index:i, dx:d.dx, dy:d.dy})`,
+`        });`,
+`      }`,
+`    }`,
+`  }`,
+`  return null;`,
+`}`,
+`async function solveBeam(startBlocks, opt){`,
+`  const info = buildStaticInfo(startBlocks);`,
+`  const mainIdx = startBlocks.findIndex(b=>b.isMain);`,
+`  const start = buildState(startBlocks);`,
+`  const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];`,
+`  const visited = new Set();`,
+`  visited.add(keyOf(start));`,
+`  let level = [{ state:start, moves:[], score:heuristic(start, mainIdx, info) }];`,
+`  const t0 = performance.now();`,
+`  for(let depth=0; depth<opt.maxDepth; depth++){`,
+`    if(depth % 60 === 0){`,
+`      if(performance.now() - t0 > opt.timeLimitMs) return null;`,
+`      await new Promise(r=>setTimeout(r,0));`,
+`    }`,
+`    const next = [];`,
+`    for(const node of level){`,
+`      const st = node.state;`,
+`      if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0) return node.moves;`,
+`      for(let i=0;i<info.length;i++){`,
+`        for(const d of dirs){`,
+`          if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;`,
+`          const ns = new Int8Array(st);`,
+`          ns[i*2]   += d.dx;`,
+`          ns[i*2+1] += d.dy;`,
+`          const k = keyOf(ns);`,
+`          if(visited.has(k)) continue;`,
+`          visited.add(k);`,
+`          const h = heuristic(ns, mainIdx, info);`,
+`          const score = (depth+1) + h*5.0;`,
+`          next.push({`,
+`            state: ns,`,
+`            moves: node.moves.concat({index:i, dx:d.dx, dy:d.dy}),`,
+`            score`,
+`          });`,
+`        }`,
+`      }`,
+`    }`,
+`    if(next.length === 0) return null;`,
+`    next.sort((a,b)=>a.score-b.score);`,
+`    level = next.length > opt.beamWidth ? next.slice(0,opt.beamWidth) : next;`,
+`  }`,
+`  return null;`,
+`}`,
+`self.onmessage = (e)=>{`,
+`  (async()=>{`,
+`    const data = e.data;`,
+`    COLS = data.COLS; ROWS = data.ROWS;`,
+`    const blocks = data.blocks;`,
+`    let moves = await solveAStar(blocks, { timeLimitMs:12000, expandLimit:140000, weight:2.0 });`,
+`    if(!moves){`,
+`      moves = await solveBeam(blocks, { timeLimitMs:45000, maxDepth:2600, beamWidth:1400 });`,
+`    }`,
+`    self.postMessage(moves || null);`,
+`  })().catch(()=>self.postMessage(null));`,
+`};`
+  ];
+
+  const blob = new Blob([workerLines.join('\n')], {type:'application/javascript'});
+  solverWorker = new Worker(URL.createObjectURL(blob));
+}
+
+async function startSolver(){
+  Sound.init();
+  const main = blocks.find(b=>b.isMain);
+  if(main && main.x===0 && main.y===0){
+    alert('既にゴールしています。');
+    return;
+  }
+
+  ensureWorker();
+
+  el.overlay.style.display = 'flex';
+  await new Promise(r=>setTimeout(r,50));
+
+  const payload = {
+    COLS, ROWS,
+    blocks: blocks.map(b=>({x:b.x,y:b.y,w:b.w,h:b.h,isMain:!!b.isMain}))
+  };
+
+  solverWorker.onmessage = (ev)=>{
+    el.overlay.style.display = 'none';
+    const moves = ev.data;
+
+    if(!moves){
+      alert('解が見つかりませんでした…（探索上限に到達）');
+      return;
+    }
+
+    if(confirm(`${moves.length} 手の解が見つかりました。\n（※最短保証はありません）\n\n自動再生しますか？`)){
+      isAuto = true;
+      autoMoves = moves;
+      el.solve.textContent = '自動再生を停止';
+      el.solve.classList.add('solving');
+      updateHud();
+      playAuto();
+    }
+  };
+
+  solverWorker.postMessage(payload);
+}
+
+function playAuto(){
+  let step = 0;
+  autoTimer = setInterval(()=>{
+    if(!isAuto){ stopAuto(); return; }
+    if(step >= autoMoves.length){ stopAuto(); return; }
+    const m = autoMoves[step++];
+    selected = m.index;
+    Sound.playMove();
+    applyMove(m.index, m.dx, m.dy);
+    moveCount++;
+    undoStack.push(m);
+    redoStack = [];
+    updateHud();
+    render();
+    checkWin();
+  }, 200);
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+function init(){
+  loadSoundSettings();
+  setGoalMarker();
+  loadBest();
+  resetGame();
+
+  // BGM ON setting: start on first user gesture (mobile policy)
+  document.body.addEventListener('pointerdown', function first(){
+    if(Sound.bgmEnabled) Sound.startBGM();
+    document.body.removeEventListener('pointerdown', first);
+  }, { once:true });
+}
+init();
+</script>
+</body>
+</html>
