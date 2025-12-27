@@ -461,7 +461,7 @@ const Sound = {
   },
 
   applyVolumes(){
-    // ★未初期化で落ちないガード（リロード直後の盤面未表示の根本原因を修正）
+    // ★未初期化で落ちないガード
     if(!this.bgmBus || !this.seBus) return;
 
     const bgmGain = (this.bgmVol/10) * 0.35;
@@ -633,7 +633,6 @@ function updateSoundUI(){
     btnSE.innerHTML = '<span>🔈</span> 効果音: OFF';
   }
 
-  // 未初期化でも落ちない（applyVolumesにガードあり）
   Sound.applyVolumes();
 }
 
@@ -660,7 +659,6 @@ function setBgmVol(v){
   localStorage.setItem('aishiteru_bgm_vol', String(Sound.bgmVol));
   document.getElementById('bgm-val').textContent = String(Sound.bgmVol);
 
-  // iOS対策：スライダー操作自体はユーザー操作なので init してOK
   Sound.init();
   Sound.applyVolumes();
   if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM(); else Sound.stopBGM();
@@ -688,15 +686,10 @@ const MODES = {
 };
 
 /* -------------------------
-   Layouts (NO overlap)
-   - Board: 6x5
-   - Empty: 2
-   - Main: 2x2 at (4,3)
-   - Mode1: 1x1 x4, 2x1 x5, 1x2 x5
-   - Mode2: 1x1 x2, 2x1 x7, 1x2 x4
+   Layouts (参考/旧固定配置)
+   ※ resetGame() は goalLayout からシャッフル生成します
    ------------------------- */
 const layout = {
-  // Mode1: J1昇格（以前の配置を維持）
   up: [
     { id: 7,  name:"横浜FC", w:2, h:1, x:0, y:0, isMain:false },
     { id: 6,  name:"徳島",   w:2, h:1, x:2, y:0, isMain:false },
@@ -715,31 +708,72 @@ const layout = {
     { id: 99, name:"新潟",   w:2, h:2, x:4, y:3, isMain:true  }
   ],
 
-  // Mode2: J1優勝（重なりゼロで作り直し・固定配置）
-  // 条件: 1x1=2, 2x1=7, 1x2=4, main=2x2, empty=2, mainは右下(4,3)固定
   champ: [
-    // 2x1 (7 pieces)
-    { id: 201, name:"鹿島", w:2, h:1, x:0, y:0, isMain:false }, // dist 0
-    { id: 202, name:"広島", w:2, h:1, x:2, y:0, isMain:false }, // dist 2
-    { id: 203, name:"G大阪", w:2, h:1, x:4, y:0, isMain:false }, // dist 4
-    { id: 204, name:"神戸", w:2, h:1, x:2, y:1, isMain:false }, // dist 3
-    { id: 205, name:"F東京", w:2, h:1, x:4, y:1, isMain:false }, // dist 5
-    { id: 206, name:"C大阪", w:2, h:1, x:2, y:3, isMain:false }, // dist 5
-    { id: 207, name:"岡山", w:2, h:1, x:2, y:4, isMain:false }, // dist 6
+    { id: 201, name:"鹿島", w:2, h:1, x:0, y:0, isMain:false },
+    { id: 202, name:"広島", w:2, h:1, x:2, y:0, isMain:false },
+    { id: 203, name:"G大阪", w:2, h:1, x:4, y:0, isMain:false },
+    { id: 204, name:"神戸", w:2, h:1, x:2, y:1, isMain:false },
+    { id: 205, name:"F東京", w:2, h:1, x:4, y:1, isMain:false },
+    { id: 206, name:"C大阪", w:2, h:1, x:2, y:3, isMain:false },
+    { id: 207, name:"岡山", w:2, h:1, x:2, y:4, isMain:false },
 
-    // 1x2 (4 pieces)
-    { id: 211, name:"柏",   w:1, h:2, x:0, y:1, isMain:false }, // dist 1
-    { id: 212, name:"京都", w:1, h:2, x:1, y:1, isMain:false }, // dist 2
-    { id: 213, name:"町田", w:1, h:2, x:0, y:3, isMain:false }, // dist 3
-    { id: 214, name:"浦和", w:1, h:2, x:1, y:3, isMain:false }, // dist 4
+    { id: 211, name:"柏",   w:1, h:2, x:0, y:1, isMain:false },
+    { id: 212, name:"京都", w:1, h:2, x:1, y:1, isMain:false },
+    { id: 213, name:"町田", w:1, h:2, x:0, y:3, isMain:false },
+    { id: 214, name:"浦和", w:1, h:2, x:1, y:3, isMain:false },
 
-    // 1x1 (2 pieces)
-    { id: 221, name:"川崎", w:1, h:1, x:2, y:2, isMain:false }, // dist 4
-    { id: 222, name:"福岡", w:1, h:1, x:3, y:2, isMain:false }, // dist 5
+    { id: 221, name:"川崎", w:1, h:1, x:2, y:2, isMain:false },
+    { id: 222, name:"福岡", w:1, h:1, x:3, y:2, isMain:false },
 
-    // main 2x2 at (4,3)
     { id: 99,  name:"新潟", w:2, h:2, x:4, y:3, isMain:true  }
-    // 空きマス2つ： (4,2) と (5,2)
+  ]
+};
+
+/* -------------------------
+   GOAL Layouts（必ず解ける基準配置：新潟(99)が(0,0)）
+   ※ blocks の順序は layout と同じ並びに揃えてあります（索引が安定）
+   ------------------------- */
+const goalLayout = {
+  // Mode1: J1昇格（ゴール状態）
+  up: [
+    { id: 7,  name:"横浜FC", w:2, h:1, x:2, y:0, isMain:false },
+    { id: 6,  name:"徳島",   w:2, h:1, x:4, y:0, isMain:false },
+    { id: 3,  name:"鳥栖",   w:1, h:2, x:0, y:2, isMain:false },
+    { id: 4,  name:"今治",   w:1, h:2, x:1, y:2, isMain:false },
+    { id: 1,  name:"湘南",   w:1, h:2, x:2, y:2, isMain:false },
+    { id: 2,  name:"磐田",   w:1, h:2, x:3, y:2, isMain:false },
+    { id: 5,  name:"大宮",   w:1, h:2, x:4, y:2, isMain:false },
+    { id: 15, name:"いわき", w:1, h:1, x:5, y:2, isMain:false },
+    { id: 12, name:"札幌",   w:1, h:1, x:5, y:3, isMain:false },
+    { id: 9,  name:"仙台",   w:2, h:1, x:2, y:1, isMain:false },
+    { id: 8,  name:"甲府",   w:2, h:1, x:4, y:1, isMain:false },
+    { id: 10, name:"山形",   w:2, h:1, x:0, y:4, isMain:false },
+    { id: 13, name:"秋田",   w:1, h:1, x:2, y:4, isMain:false },
+    { id: 14, name:"藤枝",   w:1, h:1, x:3, y:4, isMain:false },
+    { id: 99, name:"新潟",   w:2, h:2, x:0, y:0, isMain:true  }
+    // 空き2マス: (4,4) (5,4)
+  ],
+
+  // Mode2: J1優勝（ゴール状態）
+  champ: [
+    { id: 201, name:"鹿島", w:2, h:1, x:2, y:0, isMain:false },
+    { id: 202, name:"広島", w:2, h:1, x:4, y:0, isMain:false },
+    { id: 203, name:"G大阪", w:2, h:1, x:2, y:1, isMain:false },
+    { id: 204, name:"神戸", w:2, h:1, x:4, y:1, isMain:false },
+    { id: 205, name:"F東京", w:2, h:1, x:4, y:2, isMain:false },
+    { id: 206, name:"C大阪", w:2, h:1, x:4, y:3, isMain:false },
+    { id: 207, name:"岡山", w:2, h:1, x:0, y:4, isMain:false },
+
+    { id: 211, name:"柏",   w:1, h:2, x:0, y:2, isMain:false },
+    { id: 212, name:"京都", w:1, h:2, x:1, y:2, isMain:false },
+    { id: 213, name:"町田", w:1, h:2, x:2, y:2, isMain:false },
+    { id: 214, name:"浦和", w:1, h:2, x:3, y:2, isMain:false },
+
+    { id: 221, name:"川崎", w:1, h:1, x:2, y:4, isMain:false },
+    { id: 222, name:"福岡", w:1, h:1, x:3, y:4, isMain:false },
+
+    { id: 99,  name:"新潟", w:2, h:2, x:0, y:0, isMain:true  }
+    // 空き2マス: (4,4) (5,4)
   ]
 };
 
@@ -844,20 +878,7 @@ function switchMode(next){
   mode = next;
   setModeUI();
   loadBest();
-  resetGame();
-}
-
-function resetGame(){
-  stopAuto();
-  cancelSolver();
-
-  blocks = deepCopy(layout[mode]);
-  moveCount = 0;
-  selected = -1;
-  undoStack = [];
-  redoStack = [];
-  updateHud();
-  render();
+  resetGame(); // ★モード切替でも「新しい解ける初期配置」を生成
 }
 
 function updateHud(){
@@ -1029,7 +1050,6 @@ function checkWin(){
    Label auto-fit (prevents clipping)
    ========================================================= */
 function fitLabelToBlock(blockEl, labelEl){
-  // keep 1-line; shrink font until both width/height fit
   const pad = 6;
   const maxW = blockEl.clientWidth - pad;
   const maxH = blockEl.clientHeight - pad;
@@ -1068,7 +1088,6 @@ function render(){
     d.style.left   = (b.x*UNIT)+'px';
     d.style.top    = (b.y*UNIT)+'px';
 
-    // direction
     let dir = 'h';
     if(b.isMain) dir = 'v';
     else if(b.w < b.h) dir = 'v';
@@ -1084,7 +1103,6 @@ function render(){
     label.className = 'label';
     label.textContent = b.name;
 
-    // base font sizes (fitLabelToBlock will shrink if needed)
     if(b.isMain){
       label.style.fontSize = '40px';
     }else if(b.w === 1 && b.h === 1){
@@ -1125,7 +1143,6 @@ function render(){
     blockEls.push({d, label});
   });
 
-  // after append, auto-fit text
   requestAnimationFrame(()=>{
     blockEls.forEach(({d,label})=>fitLabelToBlock(d,label));
   });
@@ -1156,6 +1173,116 @@ document.body.addEventListener('click', ()=>{
 });
 
 /* =========================================================
+   SOLVABLE SHUFFLE (ゴールから合法手のみで崩す)
+   - 直前生成盤面と同一なら「その時だけ」再生成
+   ========================================================= */
+
+// 盤面キー（あなたの packStateBigInt を流用）
+function packStateBigInt(blocks){
+  let key = 0n;
+  for(let i=0;i<blocks.length;i++){
+    const x = BigInt(blocks[i].x);
+    const y = BigInt(blocks[i].y);
+    key = (key << 6n) | (x << 3n) | y;
+  }
+  return key;
+}
+
+function isGoalNow(){
+  const main = blocks.find(b=>b.isMain);
+  return !!(main && main.x===0 && main.y===0);
+}
+
+// ランダムウォーク（直前手の逆戻りを避ける）
+function scrambleWalk(steps){
+  let last = null; // {index, dx, dy}
+
+  for(let s=0; s<steps; s++){
+    const candidates = [];
+
+    for(let i=0; i<blocks.length; i++){
+      const b = blocks[i];
+      const dirs = [
+        {dx:0, dy:-1},
+        {dx:0, dy: 1},
+        {dx:-1,dy: 0},
+        {dx: 1,dy: 0}
+      ];
+
+      for(const d of dirs){
+        if(!canMove(b, d.dx, d.dy)) continue;
+
+        // 直前の逆戻りだけを避ける（ムダ往復防止）
+        if(last && last.index===i && last.dx===-d.dx && last.dy===-d.dy) continue;
+
+        candidates.push({index:i, dx:d.dx, dy:d.dy});
+      }
+    }
+
+    if(candidates.length === 0) break;
+
+    const m = candidates[Math.floor(Math.random() * candidates.length)];
+    applyMove(m.index, m.dx, m.dy);
+    last = m;
+  }
+}
+
+// 「解ける初期配置」を生成し、直前と同じならその時だけ作り直す
+function scrambleSolvableUnique(){
+  const lastKeyStore = 'aishiteru_last_generated_state'; // 直前（全モード共通）
+  const lastKey = localStorage.getItem(lastKeyStore) || '';
+
+  const maxRetry = 50;
+  let tries = 0;
+
+  while(tries < maxRetry){
+    tries++;
+
+    // 必ず解けるゴール配置から開始
+    blocks = deepCopy(goalLayout[mode]);
+
+    // シャッフル手数を少し揺らして単調さを減らす
+    const base = (mode === 'champ') ? 160 : 140;
+    const steps = base + Math.floor(Math.random() * 80); // +0..79
+    scrambleWalk(steps);
+
+    // たまたまゴールに戻ったら作り直し
+    if(isGoalNow()) continue;
+
+    const key = packStateBigInt(blocks).toString(36);
+
+    // 直前盤面と同一なら「その場合だけ」再生成
+    if(key === lastKey) continue;
+
+    // OK
+    localStorage.setItem(lastKeyStore, key);
+    return;
+  }
+
+  // 万一ここに来たら（超レア）最後の状態を採用
+  const fallbackKey = packStateBigInt(blocks).toString(36);
+  localStorage.setItem(lastKeyStore, fallbackKey);
+}
+
+/* =========================================================
+   RESET / MODE
+   ========================================================= */
+function resetGame(){
+  stopAuto();
+  cancelSolver();
+
+  // ★毎回「解ける」初期配置を新規生成（直前と同じなら再生成）
+  scrambleSolvableUnique();
+
+  moveCount = 0;
+  selected = -1;
+  undoStack = [];
+  redoStack = [];
+  updateHud();
+  render();
+}
+
+/* =========================================================
    SOLVER (WebWorker) - fast A* -> Beam fallback + cache
    ========================================================= */
 function toggleSolver(){
@@ -1181,16 +1308,6 @@ function cancelSolver(){
     solverWorker = null;
   }
   el.overlay.style.display = 'none';
-}
-
-function packStateBigInt(blocks){
-  let key = 0n;
-  for(let i=0;i<blocks.length;i++){
-    const x = BigInt(blocks[i].x);
-    const y = BigInt(blocks[i].y);
-    key = (key << 6n) | (x << 3n) | y;
-  }
-  return key;
 }
 
 function startSolver(){
@@ -1228,9 +1345,7 @@ function startSolver(){
 
   const workerScript = `
     const COLS = 6, ROWS = 5;
-    const CELLN = COLS * ROWS; // 30
 
-    // 32-bit popcount
     function pop32(x){
       x = x - ((x >>> 1) & 0x55555555);
       x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
@@ -1245,7 +1360,6 @@ function startSolver(){
       }));
     }
 
-    // base mask at (0,0) in row-major bits (y*COLS+x)
     function makeBaseMask(w,h){
       let m = 0;
       for(let y=0;y<h;y++){
@@ -1258,7 +1372,6 @@ function startSolver(){
     }
 
     function rectMask(rx, ry){
-      // rectangle from (0,0) to (rx,ry) inclusive
       let m = 0;
       for(let y=0;y<=ry;y++){
         const row = y*COLS;
@@ -1269,7 +1382,6 @@ function startSolver(){
       return m >>> 0;
     }
 
-    // heap
     class MinHeap{
       constructor(){ this.a=[]; }
       push(x){
@@ -1305,8 +1417,6 @@ function startSolver(){
       get size(){ return this.a.length; }
     }
 
-    // --- position pack: each block has pos = (x<<3)|y (0..63)
-    // --- key: BigInt with 6 bits per block, same order as blocks[]
     function makeKeyFromPos(posArr){
       let k = 0n;
       for(let i=0;i<posArr.length;i++){
@@ -1336,10 +1446,9 @@ function startSolver(){
       return out;
     }
 
-    // dynamic buffers (typed arrays) for nodes
     function NodeStore(n){
       this.n = n;
-      this.cap = 200000; // start
+      this.cap = 200000;
       this.size = 0;
 
       this.pos = new Uint8Array(this.cap * n);
@@ -1416,13 +1525,11 @@ function startSolver(){
           baseMask[i] = makeBaseMask(info[i].w, info[i].h);
         }
 
-        // precompute key shift for XOR-update (6 bits per block)
         const shiftBits = new Array(n);
         for(let i=0;i<n;i++){
           shiftBits[i] = BigInt((n-1-i)*6);
         }
 
-        // build root positions and occupancy
         const rootPos = new Uint8Array(n);
         let rootOcc = 0;
         for(let i=0;i<n;i++){
@@ -1436,7 +1543,6 @@ function startSolver(){
 
         const store = new NodeStore(n);
         const rootId = store.addRoot(rootPos, rootOcc);
-
         const rootKey = makeKeyFromPos(rootPos);
 
         function heuristic(mx,my, occMask){
@@ -1469,7 +1575,6 @@ function startSolver(){
         }
 
         function buildMasksFromNode(off){
-          // returns {xs,ys,masks,occ}
           const xs = new Int8Array(n);
           const ys = new Int8Array(n);
           const masks = new Uint32Array(n);
@@ -1495,14 +1600,12 @@ function startSolver(){
           {dx: 1,dy: 0, dir:3, shift:  1},
         ];
 
-        // Weighted A*
         async function solveWeightedAStar(timeLimitMs, expandLimit, weight){
           const bestG = new Map();
           bestG.set(rootKey, 0);
 
           const heap = new MinHeap();
 
-          // cache root mx,my
           const rootMain = getXY(rootPos[mainIdx]);
           const h0 = heuristic(rootMain.x, rootMain.y, rootOcc);
           heap.push({f: weight*h0, g:0, id:rootId, key:rootKey});
@@ -1527,7 +1630,6 @@ function startSolver(){
             const off = id * n;
             const occMask = store.occ[id];
 
-            // goal?
             const mainPos = store.pos[off + mainIdx];
             const mx = mainPos>>>3;
             const my = mainPos & 7;
@@ -1567,7 +1669,6 @@ function startSolver(){
                 const newOcc = (occWithout | newMask) >>> 0;
                 const newPosVal = ((nx<<3) | ny) & 63;
 
-                // key update by XOR-diff on 6 bits
                 const oldPosVal = store.pos[off+i] & 63;
                 const diff = (oldPosVal ^ newPosVal) & 63;
                 const childKey = key ^ (BigInt(diff) << shiftBits[i]);
@@ -1576,11 +1677,9 @@ function startSolver(){
                 const prev = bestG.get(childKey);
                 if(prev !== undefined && prev <= ng) continue;
 
-                // create node
                 const movePackVal = ((i<<2) | d.dir) & 0xffff;
                 const childId = store.addChild(id, off, movePackVal, ng, newOcc, i, newPosVal);
 
-                // heuristic for child
                 const cmx = (i===mainIdx) ? nx : mx;
                 const cmy = (i===mainIdx) ? ny : my;
                 const hh = heuristic(cmx, cmy, newOcc);
@@ -1594,12 +1693,10 @@ function startSolver(){
           return null;
         }
 
-        // Beam fallback (greedy best-first with width limit per layer)
         async function solveBeam(timeLimitMs, maxDepth, beamWidth){
           const t0 = performance.now();
           const visited = new Set();
 
-          // store keys in layer
           let layer = [{id:rootId, key:rootKey, score:0}];
           visited.add(rootKey.toString());
 
@@ -1612,7 +1709,6 @@ function startSolver(){
               const id = node.id;
               const key = node.key;
               const off = id*n;
-              const occMask = store.occ[id];
 
               const mainPos = store.pos[off + mainIdx];
               const mx = mainPos>>>3;
@@ -1660,7 +1756,6 @@ function startSolver(){
                   const cmy = (i===mainIdx) ? ny : my;
                   const hh = heuristic(cmx, cmy, newOcc);
 
-                  // slight bonus: moving main left/up is preferred
                   let bonus = 0;
                   if(i===mainIdx && (d.dir===0 || d.dir===2)) bonus = -0.25;
 
@@ -1679,18 +1774,12 @@ function startSolver(){
             layer = next.length > beamWidth ? next.slice(0, beamWidth) : next;
           }
           return null;
-      }
-      
-// --- run sequence (制限を大幅に緩和)
-// 1段階目：時間30秒、探索数500万手まで拡張
-let moves = await solveWeightedAStar(30000, 5000000, 2.55);
+        }
 
-// 2段階目：時間60秒、探索数1000万手
-if(!moves) moves = await solveWeightedAStar(60000, 10000000, 1.5);
+        let moves = await solveWeightedAStar(30000, 5000000, 2.55);
+        if(!moves) moves = await solveWeightedAStar(60000, 10000000, 1.5);
+        if(!moves) moves = await solveBeam(120000, 5000, 5000);
 
-// 3段階目（最後の手段）：ビームサーチの幅を広げて時間無制限気味に（120秒）
-if(!moves) moves = await solveBeam(120000, 5000, 5000);
-        
         postMessage({cmd:'done', moves});
 
       }catch(err){
@@ -1776,10 +1865,12 @@ function init(){
   loadSoundSettings();
   setModeUI();
   loadBest();
+
+  // ★最初の盤面も「解ける＆直前重複なら再生成」
   resetGame();
+
   requestAnimationFrame(fitBoard);
 
-  // unlock + auto-start
   document.body.addEventListener('pointerdown', function first(){
     Sound.init();
     if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM();
