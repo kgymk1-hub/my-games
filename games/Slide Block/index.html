@@ -1679,14 +1679,18 @@ function startSolver(){
             layer = next.length > beamWidth ? next.slice(0, beamWidth) : next;
           }
           return null;
-        }
+      }
+      
+// --- run sequence (制限を大幅に緩和)
+// 1段階目：時間30秒、探索数500万手まで拡張
+let moves = await solveWeightedAStar(30000, 5000000, 2.55);
 
-        // --- run sequence (時間は少し長めにして、失速しにくく)
-        let moves = await solveWeightedAStar(9000, 650000, 2.55);
-        if(!moves) moves = await solveWeightedAStar(16000, 1300000, 2.15);
-        if(!moves) moves = await solveWeightedAStar(22000, 2200000, 1.95);
-        if(!moves) moves = await solveBeam(35000, 2600, 2200);
+// 2段階目：時間60秒、探索数1000万手
+if(!moves) moves = await solveWeightedAStar(60000, 10000000, 1.5);
 
+// 3段階目（最後の手段）：ビームサーチの幅を広げて時間無制限気味に（120秒）
+if(!moves) moves = await solveBeam(120000, 5000, 5000);
+        
         postMessage({cmd:'done', moves});
 
       }catch(err){
