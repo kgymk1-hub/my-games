@@ -159,7 +159,6 @@
       padding:0 4px;
     }
     .block.selected{
-      background:#fff3e0 !important;
       border-color:var(--accent);
       box-shadow:0 0 0 2px rgba(211,47,47,.35);
       z-index:20;
@@ -341,7 +340,7 @@
 
   <div id="board-wrapper">
     <div id="board-container">
-      <div id="goal-marker">▼ 目指せ!J1昇格 ▼</div>
+      <div id="goal-marker">▼ J1昇格 ▼</div>
       <div id="game-board"></div>
     </div>
   </div>
@@ -371,6 +370,7 @@
       ※端末によっては数秒かかる場合があります<br>
       （探索中は画面を閉じないでください）
     </div>
+    <button class="secondary-btn" onclick="cancelSolver()">キャンセル</button>
   </div>
 
   <canvas id="confetti"></canvas>
@@ -676,8 +676,8 @@ function setSeVol(v){
 const COLS=6, ROWS=5, UNIT=60;
 
 const MODES = {
-  up:   { label:'目指せ!J1昇格',  storageBest:'aishiteru_best_up'   },
-  champ:{ label:'目指せ!J1優勝',  storageBest:'aishiteru_best_champ'}
+  up:   { label:'J1昇格',  storageBest:'aishiteru_best_up'   },
+  champ:{ label:'J1優勝',  storageBest:'aishiteru_best_champ'}
 };
 
 const START_MAIN_X = 4;
