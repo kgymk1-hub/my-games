@@ -108,8 +108,8 @@
       position:absolute;
       left:50%;
       top:0;
-      width:388px;          /* = 360 + padding(20) + border(8) */
-      height:328px;         /* = 300 + padding(20) + border(8) */
+      width:388px;
+      height:328px;
       padding:10px;
       border:4px solid var(--wood);
       border-radius:8px;
@@ -191,7 +191,7 @@
       font-weight:1000;
       display:block;
       pointer-events:none;
-      white-space:nowrap; /* いわき含め全員1行固定 */
+      white-space:nowrap;
     }
 
     /* arrows */
@@ -262,7 +262,7 @@
       display:flex; flex-direction:column; align-items:center; gap:10px;
     }
     .danger-desc{font-size:11px; color:#777}
-    .secondary-btn-group{display:flex; gap:16px}
+    .secondary-btn-group{display:flex; gap:12px; flex-wrap:wrap; justify-content:center}
     .secondary-btn{
       background:#fff;
       border:1px solid #999;
@@ -271,6 +271,7 @@
       font-size:13px;
       border-radius:20px;
       cursor:pointer;
+      white-space:nowrap;
     }
     .secondary-btn:active{background:#ddd}
 
@@ -358,7 +359,8 @@
   <div class="danger-zone">
     <span class="danger-desc">設定・リセット（誤操作防止エリア）</span>
     <div class="secondary-btn-group">
-      <button class="secondary-btn" onclick="resetGame()">最初に戻す</button>
+      <button class="secondary-btn" onclick="resetToSamePuzzle()">最初に戻す</button>
+      <button class="secondary-btn" onclick="newPuzzle()">新しい問題</button>
       <button class="secondary-btn" onclick="clearBestScore()">記録消去</button>
     </div>
   </div>
@@ -376,7 +378,7 @@
 
 <script>
 /* =========================================================
-   TEAM COLORS (approx primary colors)
+   TEAM COLORS
    ========================================================= */
 const TEAM_COLORS = {
   "新潟":"#ff7a00",
@@ -423,7 +425,7 @@ function pickTextColor(bgHex){
 }
 
 /* =========================================================
-   SOUND (WebAudio) - 10 steps, louder max, pop 8bit loop16
+   SOUND (WebAudio)
    ========================================================= */
 const Sound = {
   ctx:null,
@@ -461,7 +463,6 @@ const Sound = {
   },
 
   applyVolumes(){
-    // ★未初期化で落ちないガード
     if(!this.bgmBus || !this.seBus) return;
 
     const bgmGain = (this.bgmVol/10) * 0.35;
@@ -680,101 +681,16 @@ function setSeVol(v){
    ========================================================= */
 const COLS=6, ROWS=5, UNIT=60;
 
+// ★新潟ブロック（2x2）はスタートを必ず右下に固定
+const START_MAIN_X = 4;
+const START_MAIN_Y = 3;
+
+// ★シャッフルは必ず100回以上
+const MIN_SHUFFLE_STEPS = 100;
+
 const MODES = {
   up:   { label:'目指せ!J1昇格',  storageBest:'aishiteru_best_up'   },
   champ:{ label:'目指せ!J1優勝',  storageBest:'aishiteru_best_champ'}
-};
-
-/* -------------------------
-   Layouts (参考/旧固定配置)
-   ※ resetGame() は goalLayout からシャッフル生成します
-   ------------------------- */
-const layout = {
-  up: [
-    { id: 7,  name:"横浜FC", w:2, h:1, x:0, y:0, isMain:false },
-    { id: 6,  name:"徳島",   w:2, h:1, x:2, y:0, isMain:false },
-    { id: 3,  name:"鳥栖",   w:1, h:2, x:4, y:0, isMain:false },
-    { id: 4,  name:"今治",   w:1, h:2, x:5, y:0, isMain:false },
-    { id: 1,  name:"湘南",   w:1, h:2, x:0, y:1, isMain:false },
-    { id: 2,  name:"磐田",   w:1, h:2, x:1, y:1, isMain:false },
-    { id: 5,  name:"大宮",   w:1, h:2, x:2, y:1, isMain:false },
-    { id: 15, name:"いわき", w:1, h:1, x:3, y:1, isMain:false },
-    { id: 12, name:"札幌",   w:1, h:1, x:3, y:2, isMain:false },
-    { id: 9,  name:"仙台",   w:2, h:1, x:0, y:3, isMain:false },
-    { id: 8,  name:"甲府",   w:2, h:1, x:2, y:3, isMain:false },
-    { id: 10, name:"山形",   w:2, h:1, x:0, y:4, isMain:false },
-    { id: 13, name:"秋田",   w:1, h:1, x:2, y:4, isMain:false },
-    { id: 14, name:"藤枝",   w:1, h:1, x:3, y:4, isMain:false },
-    { id: 99, name:"新潟",   w:2, h:2, x:4, y:3, isMain:true  }
-  ],
-
-  champ: [
-    { id: 201, name:"鹿島", w:2, h:1, x:0, y:0, isMain:false },
-    { id: 202, name:"広島", w:2, h:1, x:2, y:0, isMain:false },
-    { id: 203, name:"G大阪", w:2, h:1, x:4, y:0, isMain:false },
-    { id: 204, name:"神戸", w:2, h:1, x:2, y:1, isMain:false },
-    { id: 205, name:"F東京", w:2, h:1, x:4, y:1, isMain:false },
-    { id: 206, name:"C大阪", w:2, h:1, x:2, y:3, isMain:false },
-    { id: 207, name:"岡山", w:2, h:1, x:2, y:4, isMain:false },
-
-    { id: 211, name:"柏",   w:1, h:2, x:0, y:1, isMain:false },
-    { id: 212, name:"京都", w:1, h:2, x:1, y:1, isMain:false },
-    { id: 213, name:"町田", w:1, h:2, x:0, y:3, isMain:false },
-    { id: 214, name:"浦和", w:1, h:2, x:1, y:3, isMain:false },
-
-    { id: 221, name:"川崎", w:1, h:1, x:2, y:2, isMain:false },
-    { id: 222, name:"福岡", w:1, h:1, x:3, y:2, isMain:false },
-
-    { id: 99,  name:"新潟", w:2, h:2, x:4, y:3, isMain:true  }
-  ]
-};
-
-/* -------------------------
-   GOAL Layouts（必ず解ける基準配置：新潟(99)が(0,0)）
-   ※ blocks の順序は layout と同じ並びに揃えてあります（索引が安定）
-   ------------------------- */
-const goalLayout = {
-  // Mode1: J1昇格（ゴール状態）
-  up: [
-    { id: 7,  name:"横浜FC", w:2, h:1, x:2, y:0, isMain:false },
-    { id: 6,  name:"徳島",   w:2, h:1, x:4, y:0, isMain:false },
-    { id: 3,  name:"鳥栖",   w:1, h:2, x:0, y:2, isMain:false },
-    { id: 4,  name:"今治",   w:1, h:2, x:1, y:2, isMain:false },
-    { id: 1,  name:"湘南",   w:1, h:2, x:2, y:2, isMain:false },
-    { id: 2,  name:"磐田",   w:1, h:2, x:3, y:2, isMain:false },
-    { id: 5,  name:"大宮",   w:1, h:2, x:4, y:2, isMain:false },
-    { id: 15, name:"いわき", w:1, h:1, x:5, y:2, isMain:false },
-    { id: 12, name:"札幌",   w:1, h:1, x:5, y:3, isMain:false },
-    { id: 9,  name:"仙台",   w:2, h:1, x:2, y:1, isMain:false },
-    { id: 8,  name:"甲府",   w:2, h:1, x:4, y:1, isMain:false },
-    { id: 10, name:"山形",   w:2, h:1, x:0, y:4, isMain:false },
-    { id: 13, name:"秋田",   w:1, h:1, x:2, y:4, isMain:false },
-    { id: 14, name:"藤枝",   w:1, h:1, x:3, y:4, isMain:false },
-    { id: 99, name:"新潟",   w:2, h:2, x:0, y:0, isMain:true  }
-    // 空き2マス: (4,4) (5,4)
-  ],
-
-  // Mode2: J1優勝（ゴール状態）
-  champ: [
-    { id: 201, name:"鹿島", w:2, h:1, x:2, y:0, isMain:false },
-    { id: 202, name:"広島", w:2, h:1, x:4, y:0, isMain:false },
-    { id: 203, name:"G大阪", w:2, h:1, x:2, y:1, isMain:false },
-    { id: 204, name:"神戸", w:2, h:1, x:4, y:1, isMain:false },
-    { id: 205, name:"F東京", w:2, h:1, x:4, y:2, isMain:false },
-    { id: 206, name:"C大阪", w:2, h:1, x:4, y:3, isMain:false },
-    { id: 207, name:"岡山", w:2, h:1, x:0, y:4, isMain:false },
-
-    { id: 211, name:"柏",   w:1, h:2, x:0, y:2, isMain:false },
-    { id: 212, name:"京都", w:1, h:2, x:1, y:2, isMain:false },
-    { id: 213, name:"町田", w:1, h:2, x:2, y:2, isMain:false },
-    { id: 214, name:"浦和", w:1, h:2, x:3, y:2, isMain:false },
-
-    { id: 221, name:"川崎", w:1, h:1, x:2, y:4, isMain:false },
-    { id: 222, name:"福岡", w:1, h:1, x:3, y:4, isMain:false },
-
-    { id: 99,  name:"新潟", w:2, h:2, x:0, y:0, isMain:true  }
-    // 空き2マス: (4,4) (5,4)
-  ]
 };
 
 const el = {
@@ -808,6 +724,9 @@ let autoTimer = null;
 
 let solverWorker = null;
 let solverCancelToken = 0;
+
+// ★「同じ問題に戻す」ためのスナップショット（問題の初期配置）
+let puzzleInitialSnapshot = null;
 
 function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
 
@@ -878,7 +797,7 @@ function switchMode(next){
   mode = next;
   setModeUI();
   loadBest();
-  resetGame(); // ★モード切替でも「新しい解ける初期配置」を生成
+  newPuzzle(); // ★モード切替時は新しい問題を生成
 }
 
 function updateHud(){
@@ -1047,7 +966,7 @@ function checkWin(){
 }
 
 /* =========================================================
-   Label auto-fit (prevents clipping)
+   Label auto-fit
    ========================================================= */
 function fitLabelToBlock(blockEl, labelEl){
   const pad = 6;
@@ -1173,11 +1092,106 @@ document.body.addEventListener('click', ()=>{
 });
 
 /* =========================================================
-   SOLVABLE SHUFFLE (ゴールから合法手のみで崩す)
-   - 直前生成盤面と同一なら「その時だけ」再生成
+   PIECE TEMPLATES (形状/IDは固定、名前はあとで割付)
    ========================================================= */
+const pieceTemplates = {
+  up: [
+    { id: 7,  w:2, h:1, isMain:false },
+    { id: 6,  w:2, h:1, isMain:false },
+    { id: 3,  w:1, h:2, isMain:false },
+    { id: 4,  w:1, h:2, isMain:false },
+    { id: 1,  w:1, h:2, isMain:false },
+    { id: 2,  w:1, h:2, isMain:false },
+    { id: 5,  w:1, h:2, isMain:false },
+    { id: 15, w:1, h:1, isMain:false },
+    { id: 12, w:1, h:1, isMain:false },
+    { id: 9,  w:2, h:1, isMain:false },
+    { id: 8,  w:2, h:1, isMain:false },
+    { id: 10, w:2, h:1, isMain:false },
+    { id: 13, w:1, h:1, isMain:false },
+    { id: 14, w:1, h:1, isMain:false },
+    { id: 99, w:2, h:2, isMain:true  }
+  ],
+  champ: [
+    { id: 201, w:2, h:1, isMain:false },
+    { id: 202, w:2, h:1, isMain:false },
+    { id: 203, w:2, h:1, isMain:false },
+    { id: 204, w:2, h:1, isMain:false },
+    { id: 205, w:2, h:1, isMain:false },
+    { id: 206, w:2, h:1, isMain:false },
+    { id: 207, w:2, h:1, isMain:false },
 
-// 盤面キー（あなたの packStateBigInt を流用）
+    { id: 211, w:1, h:2, isMain:false },
+    { id: 212, w:1, h:2, isMain:false },
+    { id: 213, w:1, h:2, isMain:false },
+    { id: 214, w:1, h:2, isMain:false },
+
+    { id: 221, w:1, h:1, isMain:false },
+    { id: 222, w:1, h:1, isMain:false },
+
+    { id: 99,  w:2, h:2, isMain:true  }
+  ]
+};
+
+// ★チーム名プール（優先順）
+// ※「ゴールに近い方から」この順で割付されます（新潟は固定）
+const namePool = {
+  up: [
+    "横浜FC","徳島","鳥栖","今治","湘南","磐田","大宮",
+    "いわき","札幌","仙台","甲府","山形","秋田","藤枝"
+  ],
+  champ: [
+    "鹿島","広島","G大阪","神戸","F東京","C大阪","岡山",
+    "柏","京都","町田","浦和","川崎","福岡"
+  ]
+};
+
+/* =========================================================
+   GOAL BASE (解ける基準配置：新潟が(0,0))
+   ※名前はここでは仮（後で割付）
+   ========================================================= */
+const goalBase = {
+  up: [
+    { id: 7,  w:2, h:1, x:2, y:0, isMain:false, name:"" },
+    { id: 6,  w:2, h:1, x:4, y:0, isMain:false, name:"" },
+    { id: 3,  w:1, h:2, x:0, y:2, isMain:false, name:"" },
+    { id: 4,  w:1, h:2, x:1, y:2, isMain:false, name:"" },
+    { id: 1,  w:1, h:2, x:2, y:2, isMain:false, name:"" },
+    { id: 2,  w:1, h:2, x:3, y:2, isMain:false, name:"" },
+    { id: 5,  w:1, h:2, x:4, y:2, isMain:false, name:"" },
+    { id: 15, w:1, h:1, x:5, y:2, isMain:false, name:"" },
+    { id: 12, w:1, h:1, x:5, y:3, isMain:false, name:"" },
+    { id: 9,  w:2, h:1, x:2, y:1, isMain:false, name:"" },
+    { id: 8,  w:2, h:1, x:4, y:1, isMain:false, name:"" },
+    { id: 10, w:2, h:1, x:0, y:4, isMain:false, name:"" },
+    { id: 13, w:1, h:1, x:2, y:4, isMain:false, name:"" },
+    { id: 14, w:1, h:1, x:3, y:4, isMain:false, name:"" },
+    { id: 99, w:2, h:2, x:0, y:0, isMain:true,  name:"新潟" }
+  ],
+  champ: [
+    { id: 201, w:2, h:1, x:2, y:0, isMain:false, name:"" },
+    { id: 202, w:2, h:1, x:4, y:0, isMain:false, name:"" },
+    { id: 203, w:2, h:1, x:2, y:1, isMain:false, name:"" },
+    { id: 204, w:2, h:1, x:4, y:1, isMain:false, name:"" },
+    { id: 205, w:2, h:1, x:4, y:2, isMain:false, name:"" },
+    { id: 206, w:2, h:1, x:4, y:3, isMain:false, name:"" },
+    { id: 207, w:2, h:1, x:0, y:4, isMain:false, name:"" },
+
+    { id: 211, w:1, h:2, x:0, y:2, isMain:false, name:"" },
+    { id: 212, w:1, h:2, x:1, y:2, isMain:false, name:"" },
+    { id: 213, w:1, h:2, x:2, y:2, isMain:false, name:"" },
+    { id: 214, w:1, h:2, x:3, y:2, isMain:false, name:"" },
+
+    { id: 221, w:1, h:1, x:2, y:4, isMain:false, name:"" },
+    { id: 222, w:1, h:1, x:3, y:4, isMain:false, name:"" },
+
+    { id: 99,  w:2, h:2, x:0, y:0, isMain:true,  name:"新潟" }
+  ]
+};
+
+/* =========================================================
+   STATE KEY
+   ========================================================= */
 function packStateBigInt(blocks){
   let key = 0n;
   for(let i=0;i<blocks.length;i++){
@@ -1192,14 +1206,49 @@ function isGoalNow(){
   const main = blocks.find(b=>b.isMain);
   return !!(main && main.x===0 && main.y===0);
 }
+function isMainAtStart(){
+  const main = blocks.find(b=>b.isMain);
+  return !!(main && main.x===START_MAIN_X && main.y===START_MAIN_Y);
+}
 
-// ランダムウォーク（直前手の逆戻りを避ける）
+/* =========================================================
+   NAME ASSIGNMENT
+   - ゴール(0,0)に近いブロックから順に、namePoolの順で割付
+   ========================================================= */
+function assignNamesByProximity(){
+  const pool = namePool[mode].slice();
+  const others = blocks
+    .map((b, idx)=>({b, idx}))
+    .filter(x=>!x.b.isMain);
+
+  // 距離: (x+y)（トップ左基準、サイズはここでは同一ルール）
+  others.sort((a,b)=>{
+    const da = (a.b.x + a.b.y);
+    const db = (b.b.x + b.b.y);
+    if(da !== db) return da - db;
+    if(a.b.x !== b.b.x) return a.b.x - b.b.x;
+    if(a.b.y !== b.b.y) return a.b.y - b.b.y;
+    return (a.b.id|0) - (b.b.id|0);
+  });
+
+  for(let i=0;i<others.length;i++){
+    others[i].b.name = pool[i] || `T${i+1}`;
+  }
+
+  const main = blocks.find(b=>b.isMain);
+  if(main) main.name = "新潟";
+}
+
+/* =========================================================
+   SOLVABLE SHUFFLE
+   - ゴールから合法手だけで崩す（必ずMIN_SHUFFLE_STEPS以上）
+   - さらに「新潟が右下スタート」条件を満たすまで作り直す
+   - 直前の新規生成と同一なら、その時だけ再生成
+   ========================================================= */
 function scrambleWalk(steps){
   let last = null; // {index, dx, dy}
-
   for(let s=0; s<steps; s++){
     const candidates = [];
-
     for(let i=0; i<blocks.length; i++){
       const b = blocks[i];
       const dirs = [
@@ -1208,72 +1257,63 @@ function scrambleWalk(steps){
         {dx:-1,dy: 0},
         {dx: 1,dy: 0}
       ];
-
       for(const d of dirs){
         if(!canMove(b, d.dx, d.dy)) continue;
-
-        // 直前の逆戻りだけを避ける（ムダ往復防止）
         if(last && last.index===i && last.dx===-d.dx && last.dy===-d.dy) continue;
-
         candidates.push({index:i, dx:d.dx, dy:d.dy});
       }
     }
-
     if(candidates.length === 0) break;
-
     const m = candidates[Math.floor(Math.random() * candidates.length)];
     applyMove(m.index, m.dx, m.dy);
     last = m;
   }
 }
 
-// 「解ける初期配置」を生成し、直前と同じならその時だけ作り直す
-function scrambleSolvableUnique(){
-  const lastKeyStore = 'aishiteru_last_generated_state'; // 直前（全モード共通）
+function generateSolvablePuzzleUnique(){
+  const lastKeyStore = `aishiteru_last_generated_state_${mode}`;
   const lastKey = localStorage.getItem(lastKeyStore) || '';
 
-  const maxRetry = 50;
-  let tries = 0;
+  const maxRetry = 600; // ★右下固定の条件があるので余裕を持たせる
+  for(let tries=0; tries<maxRetry; tries++){
+    // 1) ゴール配置から開始
+    blocks = deepCopy(goalBase[mode]);
 
-  while(tries < maxRetry){
-    tries++;
-
-    // 必ず解けるゴール配置から開始
-    blocks = deepCopy(goalLayout[mode]);
-
-    // シャッフル手数を少し揺らして単調さを減らす
-    const base = (mode === 'champ') ? 160 : 140;
-    const steps = base + Math.floor(Math.random() * 80); // +0..79
+    // 2) 100回以上シャッフル（少し幅を持たせる）
+    const steps = MIN_SHUFFLE_STEPS + 60 + Math.floor(Math.random() * 140); // 160..299
     scrambleWalk(steps);
 
-    // たまたまゴールに戻ったら作り直し
+    // 3) ゴールに戻っていたらやり直し
     if(isGoalNow()) continue;
 
-    const key = packStateBigInt(blocks).toString(36);
+    // 4) 新潟が右下(4,3)でなければやり直し
+    if(!isMainAtStart()) continue;
 
-    // 直前盤面と同一なら「その場合だけ」再生成
+    // 5) チーム名を「ゴールに近い順」で割付
+    assignNamesByProximity();
+
+    // 6) 直前の「新しい問題」と同一なら、その時だけ再生成
+    const key = packStateBigInt(blocks).toString(36);
     if(key === lastKey) continue;
 
-    // OK
     localStorage.setItem(lastKeyStore, key);
     return;
   }
 
-  // 万一ここに来たら（超レア）最後の状態を採用
+  // 万一のフォールバック（最後の状態を採用）
+  assignNamesByProximity();
   const fallbackKey = packStateBigInt(blocks).toString(36);
-  localStorage.setItem(lastKeyStore, fallbackKey);
+  localStorage.setItem(`aishiteru_last_generated_state_${mode}`, fallbackKey);
 }
 
 /* =========================================================
-   RESET / MODE
+   PROBLEM CONTROL
+   - 最初に戻す: 同じ問題に戻す
+   - 新しい問題: 新規生成してそれを問題として保存
    ========================================================= */
-function resetGame(){
+function resetCommonState(){
   stopAuto();
   cancelSolver();
-
-  // ★毎回「解ける」初期配置を新規生成（直前と同じなら再生成）
-  scrambleSolvableUnique();
-
   moveCount = 0;
   selected = -1;
   undoStack = [];
@@ -1282,8 +1322,34 @@ function resetGame(){
   render();
 }
 
+function newPuzzle(){
+  stopAuto();
+  cancelSolver();
+
+  generateSolvablePuzzleUnique();
+
+  // ★この配置を「今回の問題の初期配置」として保存
+  puzzleInitialSnapshot = deepCopy(blocks);
+
+  resetCommonState();
+}
+
+function resetToSamePuzzle(){
+  stopAuto();
+  cancelSolver();
+
+  if(!puzzleInitialSnapshot){
+    // 念のため（通常ここに来ない）
+    newPuzzle();
+    return;
+  }
+
+  blocks = deepCopy(puzzleInitialSnapshot);
+  resetCommonState();
+}
+
 /* =========================================================
-   SOLVER (WebWorker) - fast A* -> Beam fallback + cache
+   SOLVER (WebWorker) - existing
    ========================================================= */
 function toggleSolver(){
   if(isAuto) stopAuto();
@@ -1866,8 +1932,8 @@ function init(){
   setModeUI();
   loadBest();
 
-  // ★最初の盤面も「解ける＆直前重複なら再生成」
-  resetGame();
+  // ★初回は「新しい問題」を生成して、それが「最初に戻す」の対象になる
+  newPuzzle();
 
   requestAnimationFrame(fitBoard);
 
