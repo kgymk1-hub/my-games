@@ -792,10 +792,10 @@ function fitBoard(){
   if(baseH * scale > screenH) scale = screenH / baseH;
   if(scale > 1.35) scale = 1.35;
 
-  container.style.transform = \`translateX(-50%) scale(\${scale})\`;
+  container.style.transform = `translateX(-50%) scale(${scale})`;
 
-  wrapper.style.width  = \`\${baseW * scale}px\`;
-  wrapper.style.height = \`\${baseH * scale}px\`;
+  wrapper.style.width  = `${baseW * scale}px`;
+  wrapper.style.height = `${baseH * scale}px`;
 }
 window.addEventListener('load', fitBoard);
 window.addEventListener('resize', fitBoard);
@@ -829,7 +829,7 @@ function setModeUI(){
     el.btnUp.classList.remove('active'); el.btnCh.classList.add('active');
   }
   const label = MODES[mode].label;
-  el.goal.textContent = \`▼ \${label} ▼\`;
+  el.goal.textContent = `▼ ${label} ▼`;
 
   Sound.currentModeKey = mode;
   if(Sound.bgmEnabled && Sound.bgmVol>0){
@@ -1019,7 +1019,7 @@ function checkWin(){
     Sound.playWin();
 
     setTimeout(()=>{
-      alert(\`クリア！\\nモード: \${MODES[mode].label}\\n移動回数: \${moveCount}回\`);
+      alert(`クリア！\nモード: ${MODES[mode].label}\n移動回数: ${moveCount}回`);
       saveBest(moveCount);
     }, 520);
   }
@@ -1110,7 +1110,7 @@ function render(){
         const moves = getValidMovesFor(i);
         moves.forEach(m=>{
           const a = document.createElement('div');
-          a.className = \`arrow-btn \${m.cls}\`;
+          a.className = `arrow-btn ${m.cls}`;
           a.innerHTML = m.ch;
           a.onclick = (e)=>{
             e.stopPropagation();
@@ -1156,7 +1156,7 @@ document.body.addEventListener('click', ()=>{
 });
 
 /* =========================================================
-   SOLVER (WebWorker) - fast bitboard weighted A* + beam fallback
+   SOLVER (WebWorker) - fast A* -> Beam fallback + cache
    ========================================================= */
 function toggleSolver(){
   if(isAuto) stopAuto();
@@ -1202,13 +1202,13 @@ function startSolver(){
   }
 
   const stateKey = packStateBigInt(blocks).toString(36);
-  const cacheKey = \`aishiteru_cache_\${mode}_\${stateKey}\`;
+  const cacheKey = `aishiteru_cache_${mode}_${stateKey}`;
   const cached = localStorage.getItem(cacheKey);
   if(cached){
     try{
       const moves = JSON.parse(cached);
       if(Array.isArray(moves) && moves.length){
-        if(confirm(\`\${moves.length} 手の解（キャッシュ）があります。\\n自動再生しますか？\`)){
+        if(confirm(`${moves.length} 手の解（キャッシュ）があります。\n自動再生しますか？`)){
           isAuto = true;
           autoMoves = moves;
           el.solve.textContent = '自動再生を停止';
@@ -1226,45 +1226,67 @@ function startSolver(){
 
   const token = ++solverCancelToken;
 
-  // ★ここだけ高速版に差し替え（UI・操作は一切変更なし）
   const workerScript = `
-    const COLS = 6, ROWS = 5;
-    const CELLN = COLS * ROWS; // 30
-
-    function pop32(x){
-      x = x - ((x >>> 1) & 0x55555555);
-      x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
-      return (((x + (x >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24;
-    }
+    const COLS=6, ROWS=5;
 
     function buildInfo(blocks){
-      return blocks.map(b=>({
-        w: b.w|0,
-        h: b.h|0,
-        isMain: !!b.isMain
-      }));
+      return blocks.map(b=>({w:b.w|0, h:b.h|0, isMain:!!b.isMain}));
     }
+    function buildState(blocks){
+      const s = new Int8Array(blocks.length*2);
+      for(let i=0;i<blocks.length;i++){
+        s[i*2]   = blocks[i].x|0;
+        s[i*2+1] = blocks[i].y|0;
+      }
+      return s;
+    }
+    function keyOf(state){
+      let k = 0n;
+      for(let i=0;i<state.length;i+=2){
+        const x = BigInt(state[i]);
+        const y = BigInt(state[i+1]);
+        k = (k << 6n) | (x << 3n) | y;
+      }
+      return k;
+    }
+    function canMoveRaw(idx, dx, dy, st, info){
+      const w = info[idx].w, h = info[idx].h;
+      const cx = st[idx*2], cy = st[idx*2+1];
+      const nx = cx + dx, ny = cy + dy;
 
-    function makeBaseMask(w,h){
-      let m = 0;
-      for(let y=0;y<h;y++){
-        const row = y*COLS;
-        for(let x=0;x<w;x++){
-          m |= (1 << (row + x));
+      if(nx < 0 || nx + w > COLS) return false;
+      if(ny < 0 || ny + h > ROWS) return false;
+
+      const n = info.length;
+      for(let i=0;i<n;i++){
+        if(i===idx) continue;
+        const ox = st[i*2], oy = st[i*2+1];
+        const ow = info[i].w, oh = info[i].h;
+        if(nx < ox + ow && nx + w > ox &&
+           ny < oy + oh && ny + h > oy){
+          return false;
         }
       }
-      return m >>> 0;
+      return true;
     }
 
-    function rectMask(rx, ry){
-      let m = 0;
-      for(let y=0;y<=ry;y++){
-        const row = y*COLS;
-        for(let x=0;x<=rx;x++){
-          m |= (1 << (row + x));
-        }
+    function heuristic(st, mainIdx, info){
+      const mx = st[mainIdx*2];
+      const my = st[mainIdx*2+1];
+      let dist = mx + my;
+
+      const minX = 0, minY = 0;
+      const maxX = mx, maxY = my;
+
+      let pen = 0;
+      for(let i=0;i<info.length;i++){
+        if(i===mainIdx) continue;
+        const x = st[i*2], y = st[i*2+1];
+        const w = info[i].w, h = info[i].h;
+        const inRect = !(x+w-1 < minX || x > maxX || y+h-1 < minY || y > maxY);
+        if(inRect) pen++;
       }
-      return m >>> 0;
+      return dist + pen*0.65;
     }
 
     class MinHeap{
@@ -1302,20 +1324,12 @@ function startSolver(){
       get size(){ return this.a.length; }
     }
 
-    function makeKeyFromPos(posArr){
-      let k = 0n;
-      for(let i=0;i<posArr.length;i++){
-        k = (k << 6n) | BigInt(posArr[i] & 63);
-      }
-      return k;
-    }
-
     function reconstruct(parent, movePack, nodeId){
       const out=[];
       while(nodeId !== -1){
         const mp = movePack[nodeId];
         const p = parent[nodeId];
-        if(mp !== 0xffff){
+        if(mp !== -1){
           const idx = mp >>> 2;
           const dir = mp & 3;
           let dx=0, dy=0;
@@ -1331,67 +1345,164 @@ function startSolver(){
       return out;
     }
 
-    function NodeStore(n){
-      this.n = n;
-      this.cap = 200000;
-      this.size = 0;
+    async function solveAStar(startBlocks, opt){
+      const info = buildInfo(startBlocks);
+      const mainIdx = startBlocks.findIndex(b=>b.isMain);
+      const startState = buildState(startBlocks);
 
-      this.pos = new Uint8Array(this.cap * n);
-      this.parent = new Int32Array(this.cap);
-      this.movePack = new Uint16Array(this.cap);
-      this.gCost = new Uint32Array(this.cap);
-      this.occ = new Uint32Array(this.cap);
+      const SHIFT = 1 << 22;
+      const best = new Map();
+
+      const states = [];
+      const parent = [];
+      const movePack = [];
+
+      function newNode(st, pId, mp){
+        const id = states.length;
+        states.push(st);
+        parent.push(pId);
+        movePack.push(mp);
+        return id;
+      }
+
+      const heap = new MinHeap();
+      const k0 = keyOf(startState);
+      const h0 = heuristic(startState, mainIdx, info);
+      const rootId = newNode(startState, -1, -1);
+
+      best.set(k0, 0 * SHIFT + rootId);
+      heap.push({f: opt.weight*h0, g:0, id:rootId});
+
+      const dirs = [
+        {dx:0,dy:-1,dir:0},
+        {dx:0,dy:1, dir:1},
+        {dx:-1,dy:0,dir:2},
+        {dx:1,dy:0, dir:3}
+      ];
+
+      const t0 = performance.now();
+      let expanded = 0;
+      let lastReport = 0;
+
+      while(heap.size){
+        const now = performance.now();
+        if(now - t0 > opt.timeLimitMs) return null;
+        if(expanded > opt.expandLimit) return null;
+
+        const node = heap.pop();
+        const st = states[node.id];
+
+        if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0){
+          return reconstruct(parent, movePack, node.id);
+        }
+
+        expanded++;
+        if(expanded - lastReport >= 9000){
+          lastReport = expanded;
+          postMessage({cmd:'progress', expanded, elapsed: Math.round(now - t0)});
+        }
+
+        for(let i=0;i<info.length;i++){
+          for(const d of dirs){
+            if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;
+
+            const ns = new Int8Array(st);
+            ns[i*2]   += d.dx;
+            ns[i*2+1] += d.dy;
+
+            const nk = keyOf(ns);
+            const ng = node.g + 1;
+
+            const prev = best.get(nk);
+            if(prev !== undefined){
+              const pg = (prev / SHIFT) | 0;
+              if(pg <= ng) continue;
+            }
+
+            const nid = newNode(ns, node.id, (i<<2) | d.dir);
+            best.set(nk, ng * SHIFT + nid);
+
+            const nh = heuristic(ns, mainIdx, info);
+            const nf = ng + opt.weight*nh;
+            heap.push({f:nf, g:ng, id:nid});
+          }
+        }
+      }
+      return null;
     }
-    NodeStore.prototype._grow = function(){
-      const n = this.n;
-      const newCap = this.cap * 2;
 
-      const newPos = new Uint8Array(newCap * n);
-      newPos.set(this.pos);
-      this.pos = newPos;
+    async function solveBeam(startBlocks, opt){
+      const info = buildInfo(startBlocks);
+      const mainIdx = startBlocks.findIndex(b=>b.isMain);
+      const start = buildState(startBlocks);
 
-      const newParent = new Int32Array(newCap);
-      newParent.set(this.parent);
-      this.parent = newParent;
+      const dirs = [
+        {dx:0,dy:-1,dir:0},
+        {dx:0,dy:1, dir:1},
+        {dx:-1,dy:0,dir:2},
+        {dx:1,dy:0, dir:3}
+      ];
 
-      const newMove = new Uint16Array(newCap);
-      newMove.set(this.movePack);
-      this.movePack = newMove;
+      const visited = new Set();
+      visited.add(keyOf(start));
 
-      const newG = new Uint32Array(newCap);
-      newG.set(this.gCost);
-      this.gCost = newG;
+      const states = [start];
+      const parent = [-1];
+      const movePack = [-1];
 
-      const newOcc = new Uint32Array(newCap);
-      newOcc.set(this.occ);
-      this.occ = newOcc;
+      function newNode(st, pId, mp){
+        const id = states.length;
+        states.push(st);
+        parent.push(pId);
+        movePack.push(mp);
+        return id;
+      }
 
-      this.cap = newCap;
-    }
-    NodeStore.prototype.addRoot = function(posArr, occMask){
-      const n = this.n;
-      if(this.size >= this.cap) this._grow();
-      const id = this.size++;
-      const off = id*n;
-      for(let i=0;i<n;i++) this.pos[off+i] = posArr[i];
-      this.parent[id] = -1;
-      this.movePack[id] = 0xffff;
-      this.gCost[id] = 0;
-      this.occ[id] = occMask >>> 0;
-      return id;
-    }
-    NodeStore.prototype.addChild = function(parentId, parentOff, movePackVal, g, occMask, movedIdx, newPosVal){
-      const n = this.n;
-      if(this.size >= this.cap) this._grow();
-      const id = this.size++;
-      const off = id*n;
-      for(let i=0;i<n;i++) this.pos[off+i] = this.pos[parentOff+i];
-      this.pos[off + movedIdx] = newPosVal & 63;
-      this.parent[id] = parentId;
-      this.movePack[id] = movePackVal;
-      this.gCost[id] = g >>> 0;
-      this.occ[id] = occMask >>> 0;
-      return id;
+      let level = [{id:0, score:heuristic(start, mainIdx, info), depth:0}];
+      const t0 = performance.now();
+      let expanded = 0;
+
+      for(let depth=0; depth<opt.maxDepth; depth++){
+        if(performance.now() - t0 > opt.timeLimitMs) return null;
+
+        const next = [];
+        for(const node of level){
+          const st = states[node.id];
+          if(st[mainIdx*2]===0 && st[mainIdx*2+1]===0){
+            return reconstruct(parent, movePack, node.id);
+          }
+
+          for(let i=0;i<info.length;i++){
+            for(const d of dirs){
+              if(!canMoveRaw(i, d.dx, d.dy, st, info)) continue;
+
+              const ns = new Int8Array(st);
+              ns[i*2]   += d.dx;
+              ns[i*2+1] += d.dy;
+
+              const k = keyOf(ns);
+              if(visited.has(k)) continue;
+              visited.add(k);
+
+              const nid = newNode(ns, node.id, (i<<2) | d.dir);
+              const h = heuristic(ns, mainIdx, info);
+              const score = (depth+1) + h*5.0;
+              next.push({id:nid, score, depth:depth+1});
+              expanded++;
+            }
+          }
+        }
+
+        if(expanded % 20000 === 0){
+          postMessage({cmd:'progress', expanded, elapsed: Math.round(performance.now() - t0)});
+        }
+
+        if(next.length === 0) return null;
+        next.sort((a,b)=>a.score-b.score);
+        level = next.length > opt.beamWidth ? next.slice(0,opt.beamWidth) : next;
+      }
+
+      return null;
     }
 
     onmessage = async (e)=>{
@@ -1400,276 +1511,10 @@ function startSolver(){
 
       const blocks = msg.blocks;
       try{
-        const info = buildInfo(blocks);
-        const n = info.length;
-        const mainIdx = info.findIndex(b=>b.isMain);
-        const mw = info[mainIdx].w, mh = info[mainIdx].h;
-
-        const baseMask = new Uint32Array(n);
-        for(let i=0;i<n;i++){
-          baseMask[i] = makeBaseMask(info[i].w, info[i].h);
-        }
-
-        const shiftBits = new Array(n);
-        for(let i=0;i<n;i++){
-          shiftBits[i] = BigInt((n-1-i)*6);
-        }
-
-        const rootPos = new Uint8Array(n);
-        let rootOcc = 0;
-        for(let i=0;i<n;i++){
-          const x = blocks[i].x|0, y = blocks[i].y|0;
-          const pos = ((x<<3) | y) & 63;
-          rootPos[i] = pos;
-          const offset = x + y*COLS;
-          const m = (baseMask[i] << offset) >>> 0;
-          rootOcc |= m;
-        }
-
-        const store = new NodeStore(n);
-        const rootId = store.addRoot(rootPos, rootOcc);
-
-        const rootKey = makeKeyFromPos(rootPos);
-
-        function heuristic(mx,my, occMask){
-          const dist = mx + my;
-
-          const mainOffset = mx + my*COLS;
-          const mainMask = (baseMask[mainIdx] << mainOffset) >>> 0;
-
-          const rx = mx + mw - 1;
-          const ry = my + mh - 1;
-          const rMask = rectMask(rx, ry);
-
-          const blockers = pop32(((occMask ^ mainMask) & rMask) >>> 0);
-
-          let bp = 0;
-          if(mx > 0){
-            const leftMask = (mainMask >>> 1) >>> 0;
-            if((leftMask & (occMask ^ mainMask)) !== 0) bp++;
-          }
-          if(my > 0){
-            const upMask = (mainMask >>> COLS) >>> 0;
-            if((upMask & (occMask ^ mainMask)) !== 0) bp++;
-          }
-
-          return dist + blockers * 0.38 + bp * 0.85;
-        }
-
-        function getXY(pos){
-          return { x: (pos>>>3), y: (pos & 7) };
-        }
-
-        function buildMasksFromNode(off){
-          const xs = new Int8Array(n);
-          const ys = new Int8Array(n);
-          const masks = new Uint32Array(n);
-          let occ = 0;
-          for(let i=0;i<n;i++){
-            const p = store.pos[off+i];
-            const x = p>>>3;
-            const y = p & 7;
-            xs[i] = x;
-            ys[i] = y;
-            const offset = x + y*COLS;
-            const m = (baseMask[i] << offset) >>> 0;
-            masks[i] = m;
-            occ |= m;
-          }
-          return {xs,ys,masks,occ:occ>>>0};
-        }
-
-        const DIRS = [
-          {dx:0, dy:-1, dir:0, shift: -COLS},
-          {dx:0, dy: 1, dir:1, shift:  COLS},
-          {dx:-1,dy: 0, dir:2, shift: -1},
-          {dx: 1,dy: 0, dir:3, shift:  1},
-        ];
-
-        async function solveWeightedAStar(timeLimitMs, expandLimit, weight){
-          const bestG = new Map();
-          bestG.set(rootKey, 0);
-
-          const heap = new MinHeap();
-
-          const rootMain = getXY(rootPos[mainIdx]);
-          const h0 = heuristic(rootMain.x, rootMain.y, rootOcc);
-          heap.push({f: weight*h0, g:0, id:rootId, key:rootKey});
-
-          const t0 = performance.now();
-          let expanded = 0;
-          let lastReport = 0;
-
-          while(heap.size){
-            const now = performance.now();
-            if(now - t0 > timeLimitMs) return null;
-            if(expanded > expandLimit) return null;
-
-            const node = heap.pop();
-            const g = node.g;
-            const key = node.key;
-            const id  = node.id;
-
-            const best = bestG.get(key);
-            if(best === undefined || best !== g) continue;
-
-            const off = id * n;
-            const occMask = store.occ[id];
-
-            const mainPos = store.pos[off + mainIdx];
-            const mx = mainPos>>>3;
-            const my = mainPos & 7;
-            if(mx===0 && my===0){
-              return reconstruct(store.parent, store.movePack, id);
-            }
-
-            expanded++;
-            if(expanded - lastReport >= 12000){
-              lastReport = expanded;
-              postMessage({cmd:'progress', expanded, elapsed: Math.round(now - t0)});
-            }
-
-            const {xs,ys,masks,occ} = buildMasksFromNode(off);
-
-            for(let i=0;i<n;i++){
-              const w = info[i].w, h = info[i].h;
-              const x = xs[i], y = ys[i];
-              const curMask = masks[i];
-              const occWithout = (occ ^ curMask) >>> 0;
-
-              for(const d of DIRS){
-                const nx = x + d.dx;
-                const ny = y + d.dy;
-
-                if(nx < 0 || nx + w > COLS) continue;
-                if(ny < 0 || ny + h > ROWS) continue;
-
-                let newMask;
-                if(d.shift === 1) newMask = (curMask << 1) >>> 0;
-                else if(d.shift === -1) newMask = (curMask >>> 1) >>> 0;
-                else if(d.shift === COLS) newMask = (curMask << COLS) >>> 0;
-                else newMask = (curMask >>> COLS) >>> 0;
-
-                if((newMask & occWithout) !== 0) continue;
-
-                const newOcc = (occWithout | newMask) >>> 0;
-                const newPosVal = ((nx<<3) | ny) & 63;
-
-                const oldPosVal = store.pos[off+i] & 63;
-                const diff = (oldPosVal ^ newPosVal) & 63;
-                const childKey = key ^ (BigInt(diff) << shiftBits[i]);
-
-                const ng = g + 1;
-                const prev = bestG.get(childKey);
-                if(prev !== undefined && prev <= ng) continue;
-
-                const movePackVal = ((i<<2) | d.dir) & 0xffff;
-                const childId = store.addChild(id, off, movePackVal, ng, newOcc, i, newPosVal);
-
-                const cmx = (i===mainIdx) ? nx : mx;
-                const cmy = (i===mainIdx) ? ny : my;
-                const hh = heuristic(cmx, cmy, newOcc);
-                const ff = ng + weight*hh;
-
-                bestG.set(childKey, ng);
-                heap.push({f: ff, g: ng, id: childId, key: childKey});
-              }
-            }
-          }
-          return null;
-        }
-
-        async function solveBeam(timeLimitMs, maxDepth, beamWidth){
-          const t0 = performance.now();
-          const visited = new Set();
-
-          let layer = [{id:rootId, key:rootKey, score:0}];
-          visited.add(rootKey.toString());
-
-          let expanded = 0;
-          for(let depth=0; depth<maxDepth; depth++){
-            if(performance.now() - t0 > timeLimitMs) return null;
-
-            const next = [];
-            for(const node of layer){
-              const id = node.id;
-              const key = node.key;
-              const off = id*n;
-              const occMask = store.occ[id];
-
-              const mainPos = store.pos[off + mainIdx];
-              const mx = mainPos>>>3;
-              const my = mainPos & 7;
-              if(mx===0 && my===0){
-                return reconstruct(store.parent, store.movePack, id);
-              }
-
-              const {xs,ys,masks,occ} = buildMasksFromNode(off);
-
-              for(let i=0;i<n;i++){
-                const w = info[i].w, h = info[i].h;
-                const x = xs[i], y = ys[i];
-                const curMask = masks[i];
-                const occWithout = (occ ^ curMask) >>> 0;
-
-                for(const d of DIRS){
-                  const nx = x + d.dx;
-                  const ny = y + d.dy;
-                  if(nx < 0 || nx + w > COLS) continue;
-                  if(ny < 0 || ny + h > ROWS) continue;
-
-                  let newMask;
-                  if(d.shift === 1) newMask = (curMask << 1) >>> 0;
-                  else if(d.shift === -1) newMask = (curMask >>> 1) >>> 0;
-                  else if(d.shift === COLS) newMask = (curMask << COLS) >>> 0;
-                  else newMask = (curMask >>> COLS) >>> 0;
-
-                  if((newMask & occWithout) !== 0) continue;
-
-                  const newOcc = (occWithout | newMask) >>> 0;
-                  const newPosVal = ((nx<<3) | ny) & 63;
-
-                  const oldPosVal = store.pos[off+i] & 63;
-                  const diff = (oldPosVal ^ newPosVal) & 63;
-                  const childKey = key ^ (BigInt(diff) << shiftBits[i]);
-                  const childKeyStr = childKey.toString();
-                  if(visited.has(childKeyStr)) continue;
-                  visited.add(childKeyStr);
-
-                  const movePackVal = ((i<<2) | d.dir) & 0xffff;
-                  const childId = store.addChild(id, off, movePackVal, (store.gCost[id]+1)>>>0, newOcc, i, newPosVal);
-
-                  const cmx = (i===mainIdx) ? nx : mx;
-                  const cmy = (i===mainIdx) ? ny : my;
-                  const hh = heuristic(cmx, cmy, newOcc);
-
-                  let bonus = 0;
-                  if(i===mainIdx && (d.dir===0 || d.dir===2)) bonus = -0.25;
-
-                  next.push({id:childId, key:childKey, score:(depth+1) + hh*2.0 + bonus});
-                  expanded++;
-                }
-              }
-            }
-
-            if(expanded % 30000 === 0){
-              postMessage({cmd:'progress', expanded, elapsed: Math.round(performance.now() - t0)});
-            }
-
-            if(next.length === 0) return null;
-            next.sort((a,b)=>a.score-b.score);
-            layer = next.length > beamWidth ? next.slice(0, beamWidth) : next;
-          }
-          return null;
-        }
-
-        let moves = await solveWeightedAStar(9000, 650000, 2.55);
-        if(!moves) moves = await solveWeightedAStar(16000, 1300000, 2.15);
-        if(!moves) moves = await solveWeightedAStar(22000, 2200000, 1.95);
-        if(!moves) moves = await solveBeam(35000, 2600, 2200);
-
+        let moves = await solveAStar(blocks, {timeLimitMs: 4500, expandLimit: 260000, weight: 2.45});
+        if(!moves) moves = await solveAStar(blocks, {timeLimitMs: 9500, expandLimit: 700000, weight: 2.05});
+        if(!moves) moves = await solveBeam(blocks, {timeLimitMs: 28000, maxDepth: 2800, beamWidth: 1700});
         postMessage({cmd:'done', moves});
-
       }catch(err){
         postMessage({cmd:'error', error: String(err && err.message ? err.message : err)});
       }
@@ -1686,7 +1531,7 @@ function startSolver(){
     if(!msg) return;
 
     if(msg.cmd === 'progress'){
-      el.overlaySub.innerHTML = \`探索中...<br>展開: \${msg.expanded.toLocaleString()}<br>経過: \${msg.elapsed} ms\`;
+      el.overlaySub.innerHTML = `探索中...<br>展開: ${msg.expanded.toLocaleString()}<br>経過: ${msg.elapsed} ms`;
       return;
     }
 
@@ -1709,7 +1554,7 @@ function startSolver(){
 
       try{ localStorage.setItem(cacheKey, JSON.stringify(moves)); }catch(_){}
 
-      if(confirm(\`\${moves.length} 手の解が見つかりました。\\n（※最短保証はありません）\\n\\n自動再生しますか？\`)){
+      if(confirm(`${moves.length} 手の解が見つかりました。\n（※最短保証はありません）\n\n自動再生しますか？`)){
         isAuto = true;
         autoMoves = moves;
         el.solve.textContent = '自動再生を停止';
