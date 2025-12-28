@@ -473,20 +473,43 @@
       const source = audioContext.createBufferSource();
       source.buffer = noiseBuffer;
       const filter = audioContext.createBiquadFilter();
-      filter.type = "highpass";
-      filter.frequency.value = 700;
+      filter.type = "bandpass";
+      filter.Q.value = 0.7;
+      const highpass = audioContext.createBiquadFilter();
+      highpass.type = "highpass";
+      highpass.frequency.value = 500;
       const gainNode = audioContext.createGain();
       gainNode.gain.value = 0.0001;
 
       source.connect(filter);
-      filter.connect(gainNode);
+      filter.connect(highpass);
+      highpass.connect(gainNode);
       gainNode.connect(masterGain);
 
       const now = audioContext.currentTime;
-      gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-      source.start(now);
-      source.stop(now + 0.14);
+      const duration = 0.1;
+      const startFreq = 900;
+      const endFreq = 2200;
+      filter.frequency.setValueAtTime(startFreq, now);
+      filter.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+      gainNode.gain.exponentialRampToValueAtTime(0.11, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      const whisper = audioContext.createOscillator();
+      const whisperGain = audioContext.createGain();
+      whisper.type = "sine";
+      whisper.frequency.setValueAtTime(1300, now);
+      whisper.frequency.exponentialRampToValueAtTime(1900, now + duration);
+      whisperGain.gain.value = 0.0001;
+      whisper.connect(whisperGain);
+      whisperGain.connect(masterGain);
+      whisperGain.gain.exponentialRampToValueAtTime(0.025, now + 0.008);
+      whisperGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      source.start(now, Math.random());
+      source.stop(now + duration + 0.02);
+      whisper.start(now);
+      whisper.stop(now + duration + 0.04);
     }
 
     function playMergeSound(mergeValue = 2) {
@@ -495,45 +518,108 @@
       if (!audioContext || !masterGain) return;
 
       const now = audioContext.currentTime;
-      const level = Math.min(1, Math.log2(mergeValue) / 11);
-      const duration = 0.16 + level * 0.16;
-      const peakGain = 0.16 + level * 0.14;
-      const base = 420 + level * 260;
-      const gainNode = audioContext.createGain();
-      gainNode.gain.value = 0.0001;
-      gainNode.connect(masterGain);
-      gainNode.gain.exponentialRampToValueAtTime(peakGain, now + 0.015);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      const level = Math.max(1, Math.log2(mergeValue));
+      const normalized = Math.min(1, (level - 1) / 10);
+      const duration = 0.14 + normalized * 0.22;
+      const base = 360 + level * 26;
+      const tier =
+        level <= 4 ? "small" : level <= 8 ? "medium" : "large";
 
-      const oscPrimary = audioContext.createOscillator();
-      oscPrimary.type = "triangle";
-      oscPrimary.frequency.setValueAtTime(base, now);
-      oscPrimary.frequency.exponentialRampToValueAtTime(base * 1.9, now + duration * 0.8);
+      const mixGain = audioContext.createGain();
+      mixGain.gain.value = 1;
+      mixGain.connect(masterGain);
 
-      const oscAccent = audioContext.createOscillator();
-      oscAccent.type = "sawtooth";
-      oscAccent.frequency.setValueAtTime(base * 1.6, now);
-      oscAccent.frequency.exponentialRampToValueAtTime(base * 2.6, now + duration * 0.7);
-      oscAccent.detune.value = 12 + level * 30;
+      const addTone = ({
+        frequency,
+        type,
+        detune = 0,
+        peak = 0.1,
+        attack = 0.01,
+        decay = duration,
+        sweepTo = null,
+        startOffset = 0
+      }) => {
+        const osc = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.0001;
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, now + startOffset);
+        if (sweepTo) {
+          osc.frequency.exponentialRampToValueAtTime(
+            sweepTo,
+            now + startOffset + decay * 0.8
+          );
+        }
+        osc.detune.value = detune;
+        osc.connect(gainNode);
+        gainNode.connect(mixGain);
+        gainNode.gain.exponentialRampToValueAtTime(peak, now + startOffset + attack);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.0001,
+          now + startOffset + decay
+        );
+        osc.start(now + startOffset);
+        osc.stop(now + startOffset + decay + 0.08);
+      };
 
-      oscPrimary.connect(gainNode);
-      oscAccent.connect(gainNode);
+      addTone({
+        frequency: base * 0.95,
+        sweepTo: base * (1.55 + normalized * 0.3),
+        type: "triangle",
+        peak: 0.12 - normalized * 0.04,
+        attack: 0.012,
+        decay: duration
+      });
 
-      oscPrimary.start(now);
-      oscAccent.start(now + 0.01);
-
-      if (level > 0.45) {
-        const sparkle = audioContext.createOscillator();
-        sparkle.type = "square";
-        sparkle.frequency.setValueAtTime(base * 3.4, now);
-        sparkle.frequency.exponentialRampToValueAtTime(base * 4.6, now + duration * 0.6);
-        sparkle.connect(gainNode);
-        sparkle.start(now + 0.02);
-        sparkle.stop(now + duration);
+      if (tier !== "small") {
+        addTone({
+          frequency: base * 1.25,
+          sweepTo: base * 2.05,
+          type: "sine",
+          peak: 0.055 - normalized * 0.015,
+          attack: 0.01,
+          decay: duration * 0.9,
+          detune: 8 + normalized * 10,
+          startOffset: 0.01
+        });
       }
 
-      oscPrimary.stop(now + duration + 0.06);
-      oscAccent.stop(now + duration);
+      if (tier === "large") {
+        addTone({
+          frequency: base * 1.6,
+          sweepTo: base * 2.7,
+          type: "sawtooth",
+          peak: 0.045 - normalized * 0.015,
+          attack: 0.008,
+          decay: duration * 0.95,
+          detune: 16 + normalized * 18,
+          startOffset: 0.012
+        });
+
+        addTone({
+          frequency: base * 3.2,
+          sweepTo: base * 4.4,
+          type: "square",
+          peak: 0.022,
+          attack: 0.005,
+          decay: duration * 0.6,
+          startOffset: 0.02
+        });
+      }
+
+      if (tier !== "small") {
+        const delay = audioContext.createDelay(0.2);
+        const delayGain = audioContext.createGain();
+        const feedback = audioContext.createGain();
+        delay.delayTime.value = 0.06 + normalized * 0.02;
+        delayGain.gain.value = 0.14 - normalized * 0.05;
+        feedback.gain.value = 0.15;
+        mixGain.connect(delay);
+        delay.connect(delayGain);
+        delayGain.connect(masterGain);
+        delay.connect(feedback);
+        feedback.connect(delay);
+      }
     }
 
     function randomEmptyCell() {
