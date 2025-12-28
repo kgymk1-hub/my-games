@@ -6,10 +6,10 @@
   <title>2048</title>
   <style>
     :root {
-      --bg: #faf8ef;
-      --board: #bbada0;
-      --empty: #cdc1b4;
-      --text: #776e65;
+      --bg: #f9f4ff;
+      --board: #9b7df5;
+      --empty: #c7b6ff;
+      --text: #3b2f63;
       --light: #f9f6f2;
       --gap: min(2.5vw, 12px);
       --radius: 10px;
@@ -27,7 +27,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg);
+      background: radial-gradient(circle at top, #fff7e8, var(--bg));
       color: var(--text);
     }
 
@@ -56,12 +56,13 @@
     }
 
     .score-box {
-      background: var(--board);
+      background: linear-gradient(135deg, #7f5cff, #ff7dc5);
       color: var(--light);
       border-radius: 8px;
       padding: 8px 14px;
       text-align: center;
       min-width: 88px;
+      box-shadow: 0 6px 14px rgba(63, 37, 128, 0.2);
     }
 
     .score-box span {
@@ -85,7 +86,7 @@
     }
 
     button {
-      background: #8f7a66;
+      background: linear-gradient(135deg, #ff8a5c, #ff5fa2);
       color: var(--light);
       border: none;
       border-radius: 8px;
@@ -101,7 +102,7 @@
 
     .board {
       position: relative;
-      background: var(--board);
+      background: linear-gradient(135deg, #7a5cff, #57b6ff);
       border-radius: var(--radius);
       padding: var(--gap);
       display: grid;
@@ -115,7 +116,7 @@
     }
 
     .cell {
-      background: var(--empty);
+      background: rgba(255, 255, 255, 0.38);
       border-radius: var(--radius);
     }
 
@@ -131,6 +132,7 @@
       font-size: clamp(20px, 5vw, 36px);
       transition: transform 0.18s ease, opacity 0.18s ease;
       will-change: transform;
+      box-shadow: 0 10px 18px rgba(41, 19, 84, 0.18);
     }
 
     .tile.new {
@@ -254,17 +256,17 @@
     let future = [];
 
     const colors = {
-      2: "#eee4da",
-      4: "#ede0c8",
-      8: "#f2b179",
-      16: "#f59563",
-      32: "#f67c5f",
-      64: "#f65e3b",
-      128: "#edcf72",
-      256: "#edcc61",
-      512: "#edc850",
-      1024: "#edc53f",
-      2048: "#edc22e"
+      2: "#b5e4ff",
+      4: "#a6ffe0",
+      8: "#7fe4ff",
+      16: "#7dc8ff",
+      32: "#8aa8ff",
+      64: "#a683ff",
+      128: "#c96bff",
+      256: "#ff6bc4",
+      512: "#ff7a84",
+      1024: "#ff9f66",
+      2048: "#ffd166"
     };
 
     function setupBoard() {
