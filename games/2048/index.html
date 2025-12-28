@@ -16,10 +16,7 @@
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    * {
-      box-sizing: border-box;
-      touch-action: none;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -29,6 +26,9 @@
       justify-content: center;
       background: radial-gradient(circle at top, #fff7e8, var(--bg));
       color: var(--text);
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     .page {
@@ -130,9 +130,7 @@
       transition: transform 0.12s ease, background 0.2s ease;
     }
 
-    button:active {
-      transform: scale(0.97);
-    }
+    button:active { transform: scale(0.97); }
 
     .board {
       position: relative;
@@ -146,7 +144,7 @@
       grid-template-columns: repeat(4, var(--tile-size));
       grid-template-rows: repeat(4, var(--tile-size));
       gap: var(--gap);
-      touch-action: none;
+      touch-action: none; /* 盤面だけ */
     }
 
     .cell {
@@ -154,27 +152,38 @@
       border-radius: var(--radius);
     }
 
+    /* タイル本体：位置(translate)専用 */
     .tile {
       position: absolute;
       width: var(--tile-size);
       height: var(--tile-size);
+      transform: translate(0px, 0px);
+      transition: transform 0.18s ease;
+      will-change: transform;
+      pointer-events: none;
+    }
+
+    /* タイル中身：見た目＆アニメ(scale)専用 */
+    .tile-inner {
+      width: 100%;
+      height: 100%;
       border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
       font-size: clamp(20px, 5vw, 36px);
-      transition: transform 0.18s ease, opacity 0.18s ease;
-      will-change: transform;
       box-shadow: 0 10px 18px rgba(41, 19, 84, 0.18);
+      transition: opacity 0.18s ease, box-shadow 0.18s ease;
+      opacity: 1;
+      will-change: transform, opacity;
     }
 
-    .tile.new {
+    .tile.new .tile-inner {
       animation: fade-in 0.2s ease;
-      transition: opacity 0.18s ease;
     }
 
-    .tile.merge {
+    .tile.merge .tile-inner {
       animation: merge 0.2s ease;
     }
 
@@ -183,13 +192,15 @@
       to { opacity: 1; }
     }
 
+    /* ※ここでtransformを触っても、tile(translate)と分離されてるのでズレない */
     @keyframes merge {
       0% {
         transform: scale(1.12);
         box-shadow: 0 0 0 rgba(255, 255, 255, 0);
       }
       45% {
-        box-shadow: 0 0 18px rgba(255, 255, 255, 0.85),
+        box-shadow:
+          0 0 18px rgba(255, 255, 255, 0.85),
           0 0 28px rgba(255, 190, 255, 0.7);
       }
       100% {
@@ -221,13 +232,9 @@
       font-size: 22px;
     }
 
-    .overlay.show {
-      display: flex;
-    }
+    .overlay.show { display: flex; }
 
-    .overlay button {
-      font-size: 16px;
-    }
+    .overlay button { font-size: 16px; }
 
     @media (max-width: 480px) {
       .scores {
@@ -322,10 +329,22 @@
     let tileId = 0;
     let history = [];
     let future = [];
+
+    // Audio
     let audioContext = null;
     let masterGain = null;
+    let compressor = null;
     let noiseBuffer = null;
-    const storedVolume = Number(localStorage.getItem("sound-volume"));
+
+    // Merge delay (reuse)
+    let mergeDelay = null;
+    let mergeDelayGain = null;
+    let mergeFeedback = null;
+
+    const storedVolumeRaw = localStorage.getItem("sound-volume");
+    const storedVolume =
+      storedVolumeRaw === null ? NaN : Number(storedVolumeRaw);
+
     const soundSettings = {
       enabled: localStorage.getItem("sound-enabled") !== "false",
       volume: Number.isFinite(storedVolume)
@@ -372,9 +391,7 @@
 
     function pushHistory(state) {
       history.push(state);
-      if (history.length > 50) {
-        history = history.slice(history.length - 50);
-      }
+      if (history.length > 50) history = history.slice(history.length - 50);
       future = [];
       updateUndoRedo();
     }
@@ -384,15 +401,28 @@
       redoBtn.disabled = future.length === 0;
     }
 
+    function refreshMaxTile() {
+      let currentMax = 0;
+      grid.forEach((row) => {
+        row.forEach((tile) => {
+          if (tile && tile.value > currentMax) currentMax = tile.value;
+        });
+      });
+      maxTile = currentMax;
+    }
+
     function updateScores() {
       refreshMaxTile();
       scoreEl.textContent = score;
+
       if (score > best) {
         best = score;
         localStorage.setItem("best-score", String(best));
       }
       bestEl.textContent = best;
+
       maxTileEl.textContent = maxTile;
+
       if (maxTile > bestTile) {
         bestTile = maxTile;
         localStorage.setItem("best-max-tile", String(bestTile));
@@ -400,56 +430,50 @@
       bestTileEl.textContent = bestTile;
     }
 
-    function refreshMaxTile() {
-      let currentMax = 0;
-      grid.forEach((row) => {
-        row.forEach((tile) => {
-          if (tile && tile.value > currentMax) {
-            currentMax = tile.value;
-          }
-        });
-      });
-      maxTile = currentMax;
-    }
-
     function updateSoundUI() {
       soundToggle.checked = soundSettings.enabled;
       soundVolume.value = String(soundSettings.volume);
       volumeValue.textContent = String(soundSettings.volume);
       if (masterGain) {
-        masterGain.gain.value = soundSettings.volume / 10;
+        masterGain.gain.value = (soundSettings.volume / 10);
       }
     }
 
     function ensureAudioContext() {
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        masterGain = audioContext.createGain();
-        masterGain.gain.value = soundSettings.volume / 10;
-        masterGain.connect(audioContext.destination);
-      }
-      if (audioContext.state === "suspended") {
-        audioContext.resume();
-      }
-    }
 
-    function playTone({ frequency, duration, type = "sine", detune = 0 }) {
-      if (!soundSettings.enabled) return;
-      ensureAudioContext();
-      if (!audioContext || !masterGain) return;
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      oscillator.detune.value = detune;
-      gainNode.gain.value = 0.0001;
-      oscillator.connect(gainNode);
-      gainNode.connect(masterGain);
-      const now = audioContext.currentTime;
-      gainNode.gain.exponentialRampToValueAtTime(0.15, now + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      oscillator.start(now);
-      oscillator.stop(now + duration + 0.02);
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = (soundSettings.volume / 10);
+
+        // light limiter to avoid clipping when layers stack
+        compressor = audioContext.createDynamicsCompressor();
+        compressor.threshold.value = -14;
+        compressor.knee.value = 18;
+        compressor.ratio.value = 8;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.22;
+
+        masterGain.connect(compressor);
+        compressor.connect(audioContext.destination);
+
+        // Shared delay for merge sparkle (reuse)
+        mergeDelay = audioContext.createDelay(0.25);
+        mergeDelay.delayTime.value = 0.07;
+
+        mergeDelayGain = audioContext.createGain();
+        mergeDelayGain.gain.value = 0.12;
+
+        mergeFeedback = audioContext.createGain();
+        mergeFeedback.gain.value = 0.14;
+
+        mergeDelay.connect(mergeDelayGain);
+        mergeDelayGain.connect(masterGain);
+
+        mergeDelay.connect(mergeFeedback);
+        mergeFeedback.connect(mergeDelay);
+      }
+      if (audioContext.state === "suspended") audioContext.resume();
     }
 
     function ensureNoiseBuffer() {
@@ -457,53 +481,62 @@
       const bufferSize = audioContext.sampleRate;
       const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
       const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i += 1) {
-        data[i] = Math.random() * 2 - 1;
-      }
+      for (let i = 0; i < bufferSize; i += 1) data[i] = Math.random() * 2 - 1;
       noiseBuffer = buffer;
     }
 
+    // Slide "シュッ"
     function playSlideSound() {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
       if (!audioContext || !masterGain) return;
+
       ensureNoiseBuffer();
       if (!noiseBuffer) return;
 
+      const now = audioContext.currentTime;
+      const duration = 0.1;
+
       const source = audioContext.createBufferSource();
       source.buffer = noiseBuffer;
-      const filter = audioContext.createBiquadFilter();
-      filter.type = "bandpass";
-      filter.Q.value = 0.7;
+
+      const band = audioContext.createBiquadFilter();
+      band.type = "bandpass";
+      band.Q.value = 0.75;
+
       const highpass = audioContext.createBiquadFilter();
       highpass.type = "highpass";
-      highpass.frequency.value = 500;
+      highpass.frequency.value = 520;
+
       const gainNode = audioContext.createGain();
       gainNode.gain.value = 0.0001;
 
-      source.connect(filter);
-      filter.connect(highpass);
+      source.connect(band);
+      band.connect(highpass);
       highpass.connect(gainNode);
       gainNode.connect(masterGain);
 
-      const now = audioContext.currentTime;
-      const duration = 0.1;
-      const startFreq = 900;
-      const endFreq = 2200;
-      filter.frequency.setValueAtTime(startFreq, now);
-      filter.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
-      gainNode.gain.exponentialRampToValueAtTime(0.11, now + 0.01);
+      // small randomness to avoid “same sound” fatigue
+      const startFreq = 850 + (Math.random() * 120);
+      const endFreq = 2100 + (Math.random() * 220);
+
+      band.frequency.setValueAtTime(startFreq, now);
+      band.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+
+      const peak = 0.11;
+      gainNode.gain.exponentialRampToValueAtTime(peak, now + 0.01);
       gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
+      // thin whistle layer
       const whisper = audioContext.createOscillator();
       const whisperGain = audioContext.createGain();
       whisper.type = "sine";
-      whisper.frequency.setValueAtTime(1300, now);
-      whisper.frequency.exponentialRampToValueAtTime(1900, now + duration);
+      whisper.frequency.setValueAtTime(1250 + Math.random() * 120, now);
+      whisper.frequency.exponentialRampToValueAtTime(1900 + Math.random() * 160, now + duration);
       whisperGain.gain.value = 0.0001;
       whisper.connect(whisperGain);
       whisperGain.connect(masterGain);
-      whisperGain.gain.exponentialRampToValueAtTime(0.025, now + 0.008);
+      whisperGain.gain.exponentialRampToValueAtTime(0.022, now + 0.008);
       whisperGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
       source.start(now, Math.random());
@@ -512,6 +545,7 @@
       whisper.stop(now + duration + 0.04);
     }
 
+    // Merge "シャキーン"
     function playMergeSound(mergeValue = 2) {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
@@ -520,13 +554,15 @@
       const now = audioContext.currentTime;
       const level = Math.max(1, Math.log2(mergeValue));
       const normalized = Math.min(1, (level - 1) / 10);
+
       const duration = 0.14 + normalized * 0.22;
       const base = 360 + level * 26;
-      const tier =
-        level <= 4 ? "small" : level <= 8 ? "medium" : "large";
 
+      const tier = level <= 4 ? "small" : level <= 8 ? "medium" : "large";
+
+      // mix gain: protect against clipping as it gets flashy
       const mixGain = audioContext.createGain();
-      mixGain.gain.value = 1;
+      mixGain.gain.value = tier === "large" ? 0.72 : tier === "medium" ? 0.82 : 0.92;
       mixGain.connect(masterGain);
 
       const addTone = ({
@@ -542,6 +578,7 @@
         const osc = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         gainNode.gain.value = 0.0001;
+
         osc.type = type;
         osc.frequency.setValueAtTime(frequency, now + startOffset);
         if (sweepTo) {
@@ -551,32 +588,34 @@
           );
         }
         osc.detune.value = detune;
+
         osc.connect(gainNode);
         gainNode.connect(mixGain);
+
         gainNode.gain.exponentialRampToValueAtTime(peak, now + startOffset + attack);
-        gainNode.gain.exponentialRampToValueAtTime(
-          0.0001,
-          now + startOffset + decay
-        );
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + decay);
+
         osc.start(now + startOffset);
         osc.stop(now + startOffset + decay + 0.08);
       };
 
+      // Main hit
       addTone({
         frequency: base * 0.95,
         sweepTo: base * (1.55 + normalized * 0.3),
         type: "triangle",
-        peak: 0.12 - normalized * 0.04,
+        peak: 0.11 - normalized * 0.04,
         attack: 0.012,
         decay: duration
       });
 
+      // Harmony
       if (tier !== "small") {
         addTone({
           frequency: base * 1.25,
           sweepTo: base * 2.05,
           type: "sine",
-          peak: 0.055 - normalized * 0.015,
+          peak: 0.05 - normalized * 0.016,
           attack: 0.01,
           decay: duration * 0.9,
           detune: 8 + normalized * 10,
@@ -584,12 +623,13 @@
         });
       }
 
+      // Sparkle layers
       if (tier === "large") {
         addTone({
           frequency: base * 1.6,
           sweepTo: base * 2.7,
           type: "sawtooth",
-          peak: 0.045 - normalized * 0.015,
+          peak: 0.038 - normalized * 0.014,
           attack: 0.008,
           decay: duration * 0.95,
           detune: 16 + normalized * 18,
@@ -600,35 +640,48 @@
           frequency: base * 3.2,
           sweepTo: base * 4.4,
           type: "square",
-          peak: 0.022,
+          peak: 0.018,
           attack: 0.005,
           decay: duration * 0.6,
           startOffset: 0.02
         });
       }
 
-      if (tier !== "small") {
-        const delay = audioContext.createDelay(0.2);
-        const delayGain = audioContext.createGain();
-        const feedback = audioContext.createGain();
-        delay.delayTime.value = 0.06 + normalized * 0.02;
-        delayGain.gain.value = 0.14 - normalized * 0.05;
-        feedback.gain.value = 0.15;
-        mixGain.connect(delay);
-        delay.connect(delayGain);
-        delayGain.connect(masterGain);
-        delay.connect(feedback);
-        feedback.connect(delay);
+      // Reused delay send for medium/large
+      if (tier !== "small" && mergeDelay && mergeDelayGain) {
+        mergeDelay.delayTime.value = 0.06 + normalized * 0.02;
+        mergeDelayGain.gain.value = 0.13 - normalized * 0.05;
+        mergeFeedback.gain.value = 0.14;
+
+        const send = audioContext.createGain();
+        send.gain.value = 0.0001;
+        mixGain.connect(send);
+        send.connect(mergeDelay);
+
+        const sendPeak = 0.14 - normalized * 0.05;
+        send.gain.exponentialRampToValueAtTime(sendPeak, now + 0.02);
+        send.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.08);
+
+        // cleanup
+        setTimeout(() => {
+          try {
+            mixGain.disconnect(send);
+            send.disconnect(mergeDelay);
+          } catch (e) {}
+        }, Math.ceil((duration + 0.25) * 1000));
       }
+
+      // cleanup main mix node
+      setTimeout(() => {
+        try { mixGain.disconnect(); } catch (e) {}
+      }, Math.ceil((duration + 0.25) * 1000));
     }
 
     function randomEmptyCell() {
       const empties = [];
       grid.forEach((row, r) => {
         row.forEach((value, c) => {
-          if (!value) {
-            empties.push({ r, c });
-          }
+          if (!value) empties.push({ r, c });
         });
       });
       return empties[Math.floor(Math.random() * empties.length)];
@@ -637,58 +690,14 @@
     function addRandomTile() {
       const cell = randomEmptyCell();
       if (!cell) return null;
-      const tile = {
-        id: (tileId += 1),
-        value: Math.random() < 0.9 ? 2 : 4
-      };
+      const tile = { id: (tileId += 1), value: Math.random() < 0.9 ? 2 : 4 };
       grid[cell.r][cell.c] = tile;
       return tile;
     }
 
-    function renderTiles(animations = []) {
-      const existingTiles = new Map();
-      boardEl.querySelectorAll(".tile").forEach((tile) => {
-        existingTiles.set(Number(tile.dataset.id), tile);
-      });
-      const usedIds = new Set();
-
-      grid.forEach((row, r) => {
-        row.forEach((tileData, c) => {
-          if (!tileData) return;
-          const { id, value } = tileData;
-          const tile = existingTiles.get(id) || document.createElement("div");
-          tile.className = "tile";
-          tile.dataset.id = String(id);
-          tile.textContent = value;
-          const offset = getOffset(r, c);
-          tile.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
-          tile.style.background = colors[value] || "#3c3a32";
-          tile.style.color = value <= 4 ? "#776e65" : "#f9f6f2";
-          tile.style.fontSize = value >= 1024 ? "20px" : "clamp(20px, 5vw, 36px)";
-
-          tile.classList.remove("new", "merge");
-          const animation = animations.find((item) => item.id === id);
-          if (animation?.pop) tile.classList.add("new");
-          if (animation?.merge) {
-            tile.classList.add("merge");
-          }
-
-          if (!tile.parentElement) {
-            boardEl.appendChild(tile);
-          }
-          usedIds.add(id);
-        });
-      });
-
-      existingTiles.forEach((tile, id) => {
-        if (!usedIds.has(id)) {
-          tile.remove();
-        }
-      });
-    }
-
     function getOffset(r, c) {
-      const sizePx = boardEl.querySelector(".cell").getBoundingClientRect().width;
+      const cell = boardEl.querySelector(".cell");
+      const sizePx = cell.getBoundingClientRect().width;
       const styles = getComputedStyle(boardEl);
       const gap = parseFloat(styles.gap);
       const padding = parseFloat(styles.paddingLeft);
@@ -696,6 +705,56 @@
         x: padding + c * (sizePx + gap),
         y: padding + r * (sizePx + gap)
       };
+    }
+
+    function renderTiles(animations = []) {
+      const existingTiles = new Map();
+      boardEl.querySelectorAll(".tile").forEach((tile) => {
+        existingTiles.set(Number(tile.dataset.id), tile);
+      });
+
+      const usedIds = new Set();
+
+      grid.forEach((row, r) => {
+        row.forEach((tileData, c) => {
+          if (!tileData) return;
+
+          const { id, value } = tileData;
+          const tile = existingTiles.get(id) || document.createElement("div");
+          tile.className = "tile";
+          tile.dataset.id = String(id);
+
+          let inner = tile.querySelector(".tile-inner");
+          if (!inner) {
+            inner = document.createElement("div");
+            inner.className = "tile-inner";
+            tile.appendChild(inner);
+          }
+
+          inner.textContent = value;
+
+          const offset = getOffset(r, c);
+          tile.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
+
+          inner.style.background = colors[value] || "#3c3a32";
+          inner.style.color = value <= 4 ? "#776e65" : "#f9f6f2";
+          inner.style.fontSize = value >= 1024 ? "20px" : "clamp(20px, 5vw, 36px)";
+
+          tile.classList.remove("new", "merge");
+
+          const anim = animations.find((item) => item.id === id);
+          if (anim?.pop) tile.classList.add("new");
+          if (anim?.merge) tile.classList.add("merge");
+
+          if (!tile.parentElement) boardEl.appendChild(tile);
+
+          usedIds.add(id);
+        });
+      });
+
+      existingTiles.forEach((tile, id) => {
+        if (!usedIds.has(id)) tile.remove();
+      });
     }
 
     function startGame() {
@@ -706,12 +765,15 @@
       overlay.classList.remove("show");
       messageEl.textContent = "";
       emptyGrid();
+
       const first = addRandomTile();
       const second = addRandomTile();
+
       history = [];
       future = [];
       updateScores();
       updateUndoRedo();
+
       renderTiles(
         [first, second].filter(Boolean).map((tile) => ({ id: tile.id, pop: true }))
       );
@@ -733,9 +795,11 @@
       const filtered = row.filter(Boolean);
       const merged = [];
       const merges = [];
+
       for (let i = 0; i < filtered.length; i += 1) {
         const current = filtered[i];
         const next = filtered[i + 1];
+
         if (next && current.value === next.value) {
           const newValue = current.value * 2;
           const newTile = { id: current.id, value: newValue };
@@ -748,19 +812,20 @@
           merged.push(current);
         }
       }
-      while (merged.length < size) {
-        merged.push(null);
-      }
+
+      while (merged.length < size) merged.push(null);
       return { line: merged, merges };
     }
 
     function move(direction) {
       if (inputLocked) return;
+
       const previousState = {
         grid: cloneGridValues(),
         score,
         hasWon
       };
+
       let moved = false;
       const animations = [];
       let mergeCount = 0;
@@ -819,9 +884,7 @@
           const { line, merges } = slide(column);
           if (!rowsEqual(column, line)) {
             moved = true;
-            for (let r = 0; r < size; r += 1) {
-              grid[r][c] = line[r];
-            }
+            for (let r = 0; r < size; r += 1) grid[r][c] = line[r];
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -838,9 +901,7 @@
           const nextColumn = line.reverse();
           if (!rowsEqual(grid.map((row) => row[c]), nextColumn)) {
             moved = true;
-            for (let r = 0; r < size; r += 1) {
-              grid[r][c] = nextColumn[r];
-            }
+            for (let r = 0; r < size; r += 1) grid[r][c] = nextColumn[r];
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -851,14 +912,15 @@
       }
 
       if (!moved) return;
+
       pushHistory(previousState);
       inputLocked = true;
+
       renderTiles(animations);
       updateScores();
+
       playSlideSound();
-      if (mergeCount > 0) {
-        playMergeSound(maxMergeValue || 2);
-      }
+      if (mergeCount > 0) playMergeSound(maxMergeValue || 2);
 
       setTimeout(() => {
         const newTile = addRandomTile();
@@ -866,6 +928,7 @@
         renderTiles(newTile ? [{ id: newTile.id, pop: true }] : []);
         inputLocked = false;
         updateUndoRedo();
+
         if (hasWon) {
           showOverlay("You reached 2048!");
         } else if (!canMove()) {
@@ -884,11 +947,8 @@
         const key = event.key.toLowerCase();
         if (key === "z") {
           event.preventDefault();
-          if (event.shiftKey) {
-            redo();
-          } else {
-            undo();
-          }
+          if (event.shiftKey) redo();
+          else undo();
           return;
         }
         if (key === "y") {
@@ -897,14 +957,17 @@
           return;
         }
       }
+
       const keyMap = {
         ArrowLeft: "left",
         ArrowRight: "right",
         ArrowUp: "up",
         ArrowDown: "down"
       };
+
       const direction = keyMap[event.key];
       if (!direction) return;
+
       event.preventDefault();
       move(direction);
     }
@@ -917,7 +980,7 @@
         const touch = event.touches[0];
         startX = touch.clientX;
         startY = touch.clientY;
-      });
+      }, { passive: true });
 
       boardEl.addEventListener("touchend", (event) => {
         const touch = event.changedTouches[0];
@@ -926,32 +989,27 @@
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
         if (Math.max(absX, absY) < 30) return;
-        if (absX > absY) {
-          move(dx > 0 ? "right" : "left");
-        } else {
-          move(dy > 0 ? "down" : "up");
-        }
-      });
+
+        if (absX > absY) move(dx > 0 ? "right" : "left");
+        else move(dy > 0 ? "down" : "up");
+      }, { passive: true });
     }
 
     function confirmReset() {
-      if (confirm("Start a new game? Your current progress will be lost.")) {
-        startGame();
-      }
+      if (confirm("Start a new game? Your current progress will be lost.")) startGame();
     }
 
     function undo() {
       if (history.length === 0 || inputLocked) return;
-      const current = {
-        grid: cloneGridValues(),
-        score,
-        hasWon
-      };
+
+      const current = { grid: cloneGridValues(), score, hasWon };
       future.push(current);
+
       const previous = history.pop();
       restoreFromValues(previous.grid);
       score = previous.score;
       hasWon = previous.hasWon;
+
       overlay.classList.remove("show");
       updateScores();
       renderTiles();
@@ -960,16 +1018,15 @@
 
     function redo() {
       if (future.length === 0 || inputLocked) return;
-      const current = {
-        grid: cloneGridValues(),
-        score,
-        hasWon
-      };
+
+      const current = { grid: cloneGridValues(), score, hasWon };
       history.push(current);
+
       const next = future.pop();
       restoreFromValues(next.grid);
       score = next.score;
       hasWon = next.hasWon;
+
       overlay.classList.remove("show");
       updateScores();
       renderTiles();
@@ -982,15 +1039,19 @@
     updateSoundUI();
 
     window.addEventListener("keydown", handleKey);
+
     newGameBtn.addEventListener("click", confirmReset);
     overlayButton.addEventListener("click", startGame);
+
     undoBtn.addEventListener("click", undo);
     redoBtn.addEventListener("click", redo);
+
     soundToggle.addEventListener("change", () => {
       soundSettings.enabled = soundToggle.checked;
       localStorage.setItem("sound-enabled", String(soundSettings.enabled));
       updateSoundUI();
     });
+
     soundVolume.addEventListener("input", () => {
       soundSettings.volume = Number(soundVolume.value);
       localStorage.setItem("sound-volume", String(soundSettings.volume));
