@@ -11,7 +11,6 @@
       --empty: #cdc1b4;
       --text: #776e65;
       --light: #f9f6f2;
-      --tile-size: min(22vw, 110px);
       --gap: min(2.5vw, 12px);
       --radius: 10px;
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -106,6 +105,9 @@
       border-radius: var(--radius);
       padding: var(--gap);
       display: grid;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      --tile-size: calc((100% - (5 * var(--gap))) / 4);
       grid-template-columns: repeat(4, var(--tile-size));
       grid-template-rows: repeat(4, var(--tile-size));
       gap: var(--gap);
@@ -128,6 +130,7 @@
       font-weight: 700;
       font-size: clamp(20px, 5vw, 36px);
       transition: transform 0.18s ease, opacity 0.18s ease;
+      will-change: transform;
     }
 
     .tile.new {
@@ -212,6 +215,8 @@
         </div>
       </div>
       <div class="controls">
+        <button id="undo" disabled>Undo</button>
+        <button id="redo" disabled>Redo</button>
         <button id="new-game">New Game</button>
       </div>
     </header>
@@ -233,6 +238,8 @@
     const bestEl = document.getElementById("best");
     const messageEl = document.getElementById("message");
     const newGameBtn = document.getElementById("new-game");
+    const undoBtn = document.getElementById("undo");
+    const redoBtn = document.getElementById("redo");
     const overlay = document.getElementById("overlay");
     const overlayText = document.getElementById("overlay-text");
     const overlayButton = document.getElementById("overlay-button");
@@ -242,6 +249,9 @@
     let best = Number(localStorage.getItem("best-score") || 0);
     let hasWon = false;
     let inputLocked = false;
+    let tileId = 0;
+    let history = [];
+    let future = [];
 
     const colors = {
       2: "#eee4da",
@@ -267,7 +277,31 @@
     }
 
     function emptyGrid() {
-      grid = Array.from({ length: size }, () => Array(size).fill(0));
+      grid = Array.from({ length: size }, () => Array(size).fill(null));
+    }
+
+    function cloneGridValues() {
+      return grid.map((row) => row.map((tile) => (tile ? tile.value : 0)));
+    }
+
+    function restoreFromValues(values) {
+      grid = values.map((row) =>
+        row.map((value) => (value ? { id: (tileId += 1), value } : null))
+      );
+    }
+
+    function pushHistory(state) {
+      history.push(state);
+      if (history.length > 50) {
+        history = history.slice(history.length - 50);
+      }
+      future = [];
+      updateUndoRedo();
+    }
+
+    function updateUndoRedo() {
+      undoBtn.disabled = history.length === 0;
+      redoBtn.disabled = future.length === 0;
     }
 
     function updateScores() {
@@ -283,7 +317,7 @@
       const empties = [];
       grid.forEach((row, r) => {
         row.forEach((value, c) => {
-          if (value === 0) {
+          if (!value) {
             empties.push({ r, c });
           }
         });
@@ -293,18 +327,29 @@
 
     function addRandomTile() {
       const cell = randomEmptyCell();
-      if (!cell) return;
-      grid[cell.r][cell.c] = Math.random() < 0.9 ? 2 : 4;
-      renderTiles([{ r: cell.r, c: cell.c, pop: true }]);
+      if (!cell) return null;
+      const tile = {
+        id: (tileId += 1),
+        value: Math.random() < 0.9 ? 2 : 4
+      };
+      grid[cell.r][cell.c] = tile;
+      return tile;
     }
 
     function renderTiles(animations = []) {
-      boardEl.querySelectorAll(".tile").forEach((tile) => tile.remove());
+      const existingTiles = new Map();
+      boardEl.querySelectorAll(".tile").forEach((tile) => {
+        existingTiles.set(Number(tile.dataset.id), tile);
+      });
+      const usedIds = new Set();
+
       grid.forEach((row, r) => {
-        row.forEach((value, c) => {
-          if (value === 0) return;
-          const tile = document.createElement("div");
+        row.forEach((tileData, c) => {
+          if (!tileData) return;
+          const { id, value } = tileData;
+          const tile = existingTiles.get(id) || document.createElement("div");
           tile.className = "tile";
+          tile.dataset.id = String(id);
           tile.textContent = value;
           const offset = getOffset(r, c);
           tile.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
@@ -312,12 +357,22 @@
           tile.style.color = value <= 4 ? "#776e65" : "#f9f6f2";
           tile.style.fontSize = value >= 1024 ? "20px" : "clamp(20px, 5vw, 36px)";
 
-          const animation = animations.find((item) => item.r === r && item.c === c);
+          tile.classList.remove("new", "merge");
+          const animation = animations.find((item) => item.id === id);
           if (animation?.pop) tile.classList.add("new");
           if (animation?.merge) tile.classList.add("merge");
 
-          boardEl.appendChild(tile);
+          if (!tile.parentElement) {
+            boardEl.appendChild(tile);
+          }
+          usedIds.add(id);
         });
+      });
+
+      existingTiles.forEach((tile, id) => {
+        if (!usedIds.has(id)) {
+          tile.remove();
+        }
       });
     }
 
@@ -335,68 +390,89 @@
     function startGame() {
       score = 0;
       hasWon = false;
+      tileId = 0;
       overlay.classList.remove("show");
       messageEl.textContent = "";
       emptyGrid();
-      addRandomTile();
-      addRandomTile();
+      const first = addRandomTile();
+      const second = addRandomTile();
+      history = [];
+      future = [];
       updateScores();
-      renderTiles();
+      updateUndoRedo();
+      renderTiles(
+        [first, second].filter(Boolean).map((tile) => ({ id: tile.id, pop: true }))
+      );
     }
 
     function canMove() {
       for (let r = 0; r < size; r += 1) {
         for (let c = 0; c < size; c += 1) {
-          const value = grid[r][c];
-          if (value === 0) return true;
-          if (r < size - 1 && grid[r + 1][c] === value) return true;
-          if (c < size - 1 && grid[r][c + 1] === value) return true;
+          const tile = grid[r][c];
+          if (!tile) return true;
+          if (r < size - 1 && grid[r + 1][c]?.value === tile.value) return true;
+          if (c < size - 1 && grid[r][c + 1]?.value === tile.value) return true;
         }
       }
       return false;
     }
 
     function slide(row) {
-      const filtered = row.filter((value) => value !== 0);
+      const filtered = row.filter(Boolean);
       const merged = [];
+      const merges = [];
       for (let i = 0; i < filtered.length; i += 1) {
-        if (filtered[i] === filtered[i + 1]) {
-          const newValue = filtered[i] * 2;
-          merged.push(newValue);
+        const current = filtered[i];
+        const next = filtered[i + 1];
+        if (next && current.value === next.value) {
+          const newValue = current.value * 2;
+          const newTile = { id: current.id, value: newValue };
+          merged.push(newTile);
+          merges.push(newTile.id);
           score += newValue;
           if (newValue === 2048) hasWon = true;
           i += 1;
         } else {
-          merged.push(filtered[i]);
+          merged.push(current);
         }
       }
       while (merged.length < size) {
-        merged.push(0);
+        merged.push(null);
       }
-      return merged;
+      return { line: merged, merges };
     }
 
     function move(direction) {
       if (inputLocked) return;
+      const previousState = {
+        grid: cloneGridValues(),
+        score,
+        hasWon
+      };
       let moved = false;
       const animations = [];
 
-      function recordAnimation(r, c, merge = false) {
-        animations.push({ r, c, merge });
+      function recordAnimation(id, type) {
+        animations.push({ id, [type]: true });
+      }
+
+      function rowsEqual(a, b) {
+        return a.every((tile, index) => {
+          const other = b[index];
+          if (!tile && !other) return true;
+          if (!tile || !other) return false;
+          return tile.id === other.id && tile.value === other.value;
+        });
       }
 
       if (direction === "left") {
         for (let r = 0; r < size; r += 1) {
           const current = grid[r];
-          const next = slide(current);
-          if (next.some((value, i) => value !== current[i])) {
+          const { line, merges } = slide(current);
+          if (!rowsEqual(current, line)) {
             moved = true;
-            grid[r] = next;
-            next.forEach((value, c) => {
-              if (value && (current[c] !== value || current[c] === 0)) {
-                recordAnimation(r, c, current[c] && current[c] !== value);
-              }
-            });
+            grid[r] = line;
+            merges.forEach((id) => recordAnimation(id, "merge"));
           }
         }
       }
@@ -404,16 +480,13 @@
       if (direction === "right") {
         for (let r = 0; r < size; r += 1) {
           const current = [...grid[r]].reverse();
-          const next = slide(current).reverse();
+          const { line, merges } = slide(current);
+          const next = line.reverse();
           const original = grid[r];
-          if (next.some((value, i) => value !== original[i])) {
+          if (!rowsEqual(original, next)) {
             moved = true;
             grid[r] = next;
-            next.forEach((value, c) => {
-              if (value && (original[c] !== value || original[c] === 0)) {
-                recordAnimation(r, c, original[c] && original[c] !== value);
-              }
-            });
+            merges.forEach((id) => recordAnimation(id, "merge"));
           }
         }
       }
@@ -421,15 +494,13 @@
       if (direction === "up") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]);
-          const nextColumn = slide(column);
-          if (nextColumn.some((value, r) => value !== grid[r][c])) {
+          const { line, merges } = slide(column);
+          if (!rowsEqual(column, line)) {
             moved = true;
             for (let r = 0; r < size; r += 1) {
-              grid[r][c] = nextColumn[r];
-              if (nextColumn[r] && column[r] !== nextColumn[r]) {
-                recordAnimation(r, c, column[r] && column[r] !== nextColumn[r]);
-              }
+              grid[r][c] = line[r];
             }
+            merges.forEach((id) => recordAnimation(id, "merge"));
           }
         }
       }
@@ -437,29 +508,30 @@
       if (direction === "down") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]).reverse();
-          const nextColumn = slide(column).reverse();
-          if (nextColumn.some((value, r) => value !== grid[r][c])) {
+          const { line, merges } = slide(column);
+          const nextColumn = line.reverse();
+          if (!rowsEqual(grid.map((row) => row[c]), nextColumn)) {
             moved = true;
             for (let r = 0; r < size; r += 1) {
-              if (nextColumn[r] && grid[r][c] !== nextColumn[r]) {
-                recordAnimation(r, c, grid[r][c] && grid[r][c] !== nextColumn[r]);
-              }
               grid[r][c] = nextColumn[r];
             }
+            merges.forEach((id) => recordAnimation(id, "merge"));
           }
         }
       }
 
       if (!moved) return;
+      pushHistory(previousState);
       inputLocked = true;
       renderTiles(animations);
       updateScores();
 
       setTimeout(() => {
-        addRandomTile();
+        const newTile = addRandomTile();
         updateScores();
-        renderTiles();
+        renderTiles(newTile ? [{ id: newTile.id, pop: true }] : []);
         inputLocked = false;
+        updateUndoRedo();
         if (hasWon) {
           showOverlay("You reached 2048!");
         } else if (!canMove()) {
@@ -474,6 +546,23 @@
     }
 
     function handleKey(event) {
+      if (event.ctrlKey || event.metaKey) {
+        const key = event.key.toLowerCase();
+        if (key === "z") {
+          event.preventDefault();
+          if (event.shiftKey) {
+            redo();
+          } else {
+            undo();
+          }
+          return;
+        }
+        if (key === "y") {
+          event.preventDefault();
+          redo();
+          return;
+        }
+      }
       const keyMap = {
         ArrowLeft: "left",
         ArrowRight: "right",
@@ -517,6 +606,42 @@
       }
     }
 
+    function undo() {
+      if (history.length === 0 || inputLocked) return;
+      const current = {
+        grid: cloneGridValues(),
+        score,
+        hasWon
+      };
+      future.push(current);
+      const previous = history.pop();
+      restoreFromValues(previous.grid);
+      score = previous.score;
+      hasWon = previous.hasWon;
+      overlay.classList.remove("show");
+      updateScores();
+      renderTiles();
+      updateUndoRedo();
+    }
+
+    function redo() {
+      if (future.length === 0 || inputLocked) return;
+      const current = {
+        grid: cloneGridValues(),
+        score,
+        hasWon
+      };
+      history.push(current);
+      const next = future.pop();
+      restoreFromValues(next.grid);
+      score = next.score;
+      hasWon = next.hasWon;
+      overlay.classList.remove("show");
+      updateScores();
+      renderTiles();
+      updateUndoRedo();
+    }
+
     setupBoard();
     startGame();
     handleTouch();
@@ -524,6 +649,8 @@
     window.addEventListener("keydown", handleKey);
     newGameBtn.addEventListener("click", confirmReset);
     overlayButton.addEventListener("click", startGame);
+    undoBtn.addEventListener("click", undo);
+    redoBtn.addEventListener("click", redo);
   </script>
 </body>
 </html>
