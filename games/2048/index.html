@@ -83,6 +83,7 @@
       display: flex;
       gap: 10px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .sound-controls {
@@ -96,6 +97,8 @@
       font-weight: 600;
       color: #4a3a72;
       box-shadow: 0 4px 10px rgba(63, 37, 128, 0.12);
+      flex-wrap: wrap;
+      max-width: 100%;
     }
 
     .sound-controls input[type="checkbox"] {
@@ -104,7 +107,7 @@
     }
 
     .sound-controls input[type="range"] {
-      width: 90px;
+      width: clamp(70px, 28vw, 120px);
       accent-color: #7a5cff;
     }
 
@@ -296,6 +299,7 @@
     let future = [];
     let audioContext = null;
     let masterGain = null;
+    let noiseBuffer = null;
     const storedVolume = Number(localStorage.getItem("sound-volume"));
     const soundSettings = {
       enabled: localStorage.getItem("sound-enabled") !== "false",
@@ -385,7 +389,7 @@
       }
     }
 
-    function playTone({ frequency, duration, type = "sine" }) {
+    function playTone({ frequency, duration, type = "sine", detune = 0 }) {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
       if (!audioContext || !masterGain) return;
@@ -393,6 +397,7 @@
       const gainNode = audioContext.createGain();
       oscillator.type = type;
       oscillator.frequency.value = frequency;
+      oscillator.detune.value = detune;
       gainNode.gain.value = 0.0001;
       oscillator.connect(gainNode);
       gainNode.connect(masterGain);
@@ -403,12 +408,72 @@
       oscillator.stop(now + duration + 0.02);
     }
 
+    function ensureNoiseBuffer() {
+      if (!audioContext || noiseBuffer) return;
+      const bufferSize = audioContext.sampleRate;
+      const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i += 1) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      noiseBuffer = buffer;
+    }
+
     function playSlideSound() {
-      playTone({ frequency: 320, duration: 0.12, type: "triangle" });
+      if (!soundSettings.enabled) return;
+      ensureAudioContext();
+      if (!audioContext || !masterGain) return;
+      ensureNoiseBuffer();
+      if (!noiseBuffer) return;
+
+      const source = audioContext.createBufferSource();
+      source.buffer = noiseBuffer;
+      const filter = audioContext.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.value = 700;
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 0.0001;
+
+      source.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(masterGain);
+
+      const now = audioContext.currentTime;
+      gainNode.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+      source.start(now);
+      source.stop(now + 0.14);
     }
 
     function playMergeSound() {
-      playTone({ frequency: 520, duration: 0.18, type: "square" });
+      if (!soundSettings.enabled) return;
+      ensureAudioContext();
+      if (!audioContext || !masterGain) return;
+
+      const now = audioContext.currentTime;
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 0.0001;
+      gainNode.connect(masterGain);
+      gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.015);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+      const oscPrimary = audioContext.createOscillator();
+      oscPrimary.type = "triangle";
+      oscPrimary.frequency.setValueAtTime(520, now);
+      oscPrimary.frequency.exponentialRampToValueAtTime(980, now + 0.18);
+
+      const oscAccent = audioContext.createOscillator();
+      oscAccent.type = "sine";
+      oscAccent.frequency.setValueAtTime(820, now);
+      oscAccent.frequency.exponentialRampToValueAtTime(1400, now + 0.16);
+
+      oscPrimary.connect(gainNode);
+      oscAccent.connect(gainNode);
+
+      oscPrimary.start(now);
+      oscAccent.start(now + 0.015);
+      oscPrimary.stop(now + 0.24);
+      oscAccent.stop(now + 0.22);
     }
 
     function randomEmptyCell() {
