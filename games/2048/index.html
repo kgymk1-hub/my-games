@@ -323,10 +323,12 @@
 
     function getOffset(r, c) {
       const sizePx = boardEl.querySelector(".cell").getBoundingClientRect().width;
-      const gap = parseFloat(getComputedStyle(boardEl).gap);
+      const styles = getComputedStyle(boardEl);
+      const gap = parseFloat(styles.gap);
+      const padding = parseFloat(styles.paddingLeft);
       return {
-        x: c * (sizePx + gap),
-        y: r * (sizePx + gap)
+        x: padding + c * (sizePx + gap),
+        y: padding + r * (sizePx + gap)
       };
     }
 
