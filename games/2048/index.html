@@ -85,6 +85,35 @@
       align-items: center;
     }
 
+    .sound-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.55);
+      font-size: 12px;
+      font-weight: 600;
+      color: #4a3a72;
+      box-shadow: 0 4px 10px rgba(63, 37, 128, 0.12);
+    }
+
+    .sound-controls input[type="checkbox"] {
+      accent-color: #ff6aa9;
+      cursor: pointer;
+    }
+
+    .sound-controls input[type="range"] {
+      width: 90px;
+      accent-color: #7a5cff;
+    }
+
+    .sound-controls .volume-value {
+      min-width: 18px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
     button {
       background: linear-gradient(135deg, #ff8a5c, #ff5fa2);
       color: var(--light);
@@ -220,6 +249,14 @@
         <button id="undo" disabled>Undo</button>
         <button id="redo" disabled>Redo</button>
         <button id="new-game">New Game</button>
+        <div class="sound-controls">
+          <label>
+            <input type="checkbox" id="sound-toggle" />
+            Sound
+          </label>
+          <input type="range" id="sound-volume" min="0" max="10" step="1" />
+          <span class="volume-value" id="volume-value">5</span>
+        </div>
       </div>
     </header>
 
@@ -242,6 +279,9 @@
     const newGameBtn = document.getElementById("new-game");
     const undoBtn = document.getElementById("undo");
     const redoBtn = document.getElementById("redo");
+    const soundToggle = document.getElementById("sound-toggle");
+    const soundVolume = document.getElementById("sound-volume");
+    const volumeValue = document.getElementById("volume-value");
     const overlay = document.getElementById("overlay");
     const overlayText = document.getElementById("overlay-text");
     const overlayButton = document.getElementById("overlay-button");
@@ -254,6 +294,15 @@
     let tileId = 0;
     let history = [];
     let future = [];
+    let audioContext = null;
+    let masterGain = null;
+    const storedVolume = Number(localStorage.getItem("sound-volume"));
+    const soundSettings = {
+      enabled: localStorage.getItem("sound-enabled") !== "false",
+      volume: Number.isFinite(storedVolume)
+        ? Math.min(10, Math.max(0, storedVolume))
+        : 5
+    };
 
     const colors = {
       2: "#b5e4ff",
@@ -313,6 +362,53 @@
         localStorage.setItem("best-score", String(best));
       }
       bestEl.textContent = best;
+    }
+
+    function updateSoundUI() {
+      soundToggle.checked = soundSettings.enabled;
+      soundVolume.value = String(soundSettings.volume);
+      volumeValue.textContent = String(soundSettings.volume);
+      if (masterGain) {
+        masterGain.gain.value = soundSettings.volume / 10;
+      }
+    }
+
+    function ensureAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = soundSettings.volume / 10;
+        masterGain.connect(audioContext.destination);
+      }
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+    }
+
+    function playTone({ frequency, duration, type = "sine" }) {
+      if (!soundSettings.enabled) return;
+      ensureAudioContext();
+      if (!audioContext || !masterGain) return;
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = 0.0001;
+      oscillator.connect(gainNode);
+      gainNode.connect(masterGain);
+      const now = audioContext.currentTime;
+      gainNode.gain.exponentialRampToValueAtTime(0.15, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      oscillator.start(now);
+      oscillator.stop(now + duration + 0.02);
+    }
+
+    function playSlideSound() {
+      playTone({ frequency: 320, duration: 0.12, type: "triangle" });
+    }
+
+    function playMergeSound() {
+      playTone({ frequency: 520, duration: 0.18, type: "square" });
     }
 
     function randomEmptyCell() {
@@ -453,6 +549,7 @@
       };
       let moved = false;
       const animations = [];
+      let mergeCount = 0;
 
       function recordAnimation(id, type) {
         animations.push({ id, [type]: true });
@@ -475,6 +572,7 @@
             moved = true;
             grid[r] = line;
             merges.forEach((id) => recordAnimation(id, "merge"));
+            mergeCount += merges.length;
           }
         }
       }
@@ -489,6 +587,7 @@
             moved = true;
             grid[r] = next;
             merges.forEach((id) => recordAnimation(id, "merge"));
+            mergeCount += merges.length;
           }
         }
       }
@@ -503,6 +602,7 @@
               grid[r][c] = line[r];
             }
             merges.forEach((id) => recordAnimation(id, "merge"));
+            mergeCount += merges.length;
           }
         }
       }
@@ -518,6 +618,7 @@
               grid[r][c] = nextColumn[r];
             }
             merges.forEach((id) => recordAnimation(id, "merge"));
+            mergeCount += merges.length;
           }
         }
       }
@@ -527,6 +628,10 @@
       inputLocked = true;
       renderTiles(animations);
       updateScores();
+      playSlideSound();
+      if (mergeCount > 0) {
+        playMergeSound();
+      }
 
       setTimeout(() => {
         const newTile = addRandomTile();
@@ -647,12 +752,23 @@
     setupBoard();
     startGame();
     handleTouch();
+    updateSoundUI();
 
     window.addEventListener("keydown", handleKey);
     newGameBtn.addEventListener("click", confirmReset);
     overlayButton.addEventListener("click", startGame);
     undoBtn.addEventListener("click", undo);
     redoBtn.addEventListener("click", redo);
+    soundToggle.addEventListener("change", () => {
+      soundSettings.enabled = soundToggle.checked;
+      localStorage.setItem("sound-enabled", String(soundSettings.enabled));
+      updateSoundUI();
+    });
+    soundVolume.addEventListener("input", () => {
+      soundSettings.volume = Number(soundVolume.value);
+      localStorage.setItem("sound-volume", String(soundSettings.volume));
+      updateSoundUI();
+    });
   </script>
 </body>
 </html>
