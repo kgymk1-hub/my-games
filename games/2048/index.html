@@ -7,8 +7,8 @@
   <style>
     :root {
       --bg: #faf8ef;
-      --board: #c7b6ff;
-      --empty: #e6dcff;
+      --board: #bbada0;
+      --empty: #cdc1b4;
       --text: #776e65;
       --light: #f9f6f2;
       --gap: min(2.5vw, 12px);
@@ -56,7 +56,7 @@
     }
 
     .score-box {
-      background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+      background: var(--board);
       color: var(--light);
       border-radius: 8px;
       padding: 8px 14px;
@@ -82,11 +82,10 @@
       display: flex;
       gap: 10px;
       align-items: center;
-      flex-wrap: wrap;
     }
 
     button {
-      background: linear-gradient(135deg, #7f7bff, #ff9ad5);
+      background: #8f7a66;
       color: var(--light);
       border: none;
       border-radius: 8px;
@@ -98,41 +97,6 @@
 
     button:active {
       transform: scale(0.97);
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-undo {
-      background: linear-gradient(135deg, #5ee7df, #b490ca);
-    }
-
-    .btn-redo {
-      background: linear-gradient(135deg, #86ffbd, #fffb7d);
-      color: #4d4d4d;
-    }
-
-    .btn-new {
-      background: linear-gradient(135deg, #ff758c, #ff7eb3);
-    }
-
-    .sound-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: #ffffffcc;
-      padding: 6px 10px;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      color: #5a4d83;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .sound-controls input[type="range"] {
-      accent-color: #7f7bff;
     }
 
     .board {
@@ -167,29 +131,24 @@
       font-size: clamp(20px, 5vw, 36px);
       transition: transform 0.18s ease, opacity 0.18s ease;
       will-change: transform;
-      --row: 0;
-      --col: 0;
-      --tx: calc(var(--gap) + (var(--col) * (var(--tile-size) + var(--gap))));
-      --ty: calc(var(--gap) + (var(--row) * (var(--tile-size) + var(--gap))));
-      transform: translate(var(--tx), var(--ty));
     }
 
     .tile.new {
-      animation: fade-in 0.22s ease;
+      animation: pop 0.2s ease;
     }
 
     .tile.merge {
       animation: merge 0.2s ease;
     }
 
-    @keyframes fade-in {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    @keyframes pop {
+      from { transform: scale(0.4); opacity: 0.4; }
+      to { transform: scale(1); opacity: 1; }
     }
 
     @keyframes merge {
-      from { transform: translate(var(--tx), var(--ty)) scale(1.12); }
-      to { transform: translate(var(--tx), var(--ty)) scale(1); }
+      from { transform: scale(1.12); }
+      to { transform: scale(1); }
     }
 
     .message {
@@ -256,14 +215,9 @@
         </div>
       </div>
       <div class="controls">
-        <button class="btn-undo" id="undo" disabled>Undo</button>
-        <button class="btn-redo" id="redo" disabled>Redo</button>
-        <button class="btn-new" id="new-game">New Game</button>
-        <div class="sound-controls">
-          <button id="sound-toggle" aria-pressed="true">Sound: On</button>
-          <label for="volume">Vol</label>
-          <input id="volume" type="range" min="0" max="10" step="1" value="6" />
-        </div>
+        <button id="undo" disabled>Undo</button>
+        <button id="redo" disabled>Redo</button>
+        <button id="new-game">New Game</button>
       </div>
     </header>
 
@@ -289,8 +243,6 @@
     const overlay = document.getElementById("overlay");
     const overlayText = document.getElementById("overlay-text");
     const overlayButton = document.getElementById("overlay-button");
-    const soundToggleBtn = document.getElementById("sound-toggle");
-    const volumeSlider = document.getElementById("volume");
 
     let grid = [];
     let score = 0;
@@ -300,22 +252,19 @@
     let tileId = 0;
     let history = [];
     let future = [];
-    let soundEnabled = localStorage.getItem("sound-enabled") !== "false";
-    let soundVolume = Number(localStorage.getItem("sound-volume") || 6);
-    let audioContext = null;
 
     const colors = {
-      2: "#a5f3fc",
-      4: "#c7d2fe",
-      8: "#f9a8d4",
-      16: "#fbcfe8",
-      32: "#fda4af",
-      64: "#fdba74",
-      128: "#fef08a",
-      256: "#bbf7d0",
-      512: "#86efac",
-      1024: "#93c5fd",
-      2048: "#fcd34d"
+      2: "#eee4da",
+      4: "#ede0c8",
+      8: "#f2b179",
+      16: "#f59563",
+      32: "#f67c5f",
+      64: "#f65e3b",
+      128: "#edcf72",
+      256: "#edcc61",
+      512: "#edc850",
+      1024: "#edc53f",
+      2048: "#edc22e"
     };
 
     function setupBoard() {
@@ -402,10 +351,10 @@
           tile.className = "tile";
           tile.dataset.id = String(id);
           tile.textContent = value;
-          tile.style.setProperty("--row", r);
-          tile.style.setProperty("--col", c);
+          const offset = getOffset(r, c);
+          tile.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
           tile.style.background = colors[value] || "#3c3a32";
-          tile.style.color = value <= 4 ? "#3f3d56" : "#1b1b1b";
+          tile.style.color = value <= 4 ? "#776e65" : "#f9f6f2";
           tile.style.fontSize = value >= 1024 ? "20px" : "clamp(20px, 5vw, 36px)";
 
           tile.classList.remove("new", "merge");
@@ -427,38 +376,15 @@
       });
     }
 
-    function ensureAudioContext() {
-      if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioContext.state === "suspended") {
-        audioContext.resume();
-      }
-    }
-
-    function playTone({ startFreq, endFreq, duration, type = "sine" }) {
-      if (!soundEnabled) return;
-      ensureAudioContext();
-      const osc = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      const now = audioContext.currentTime;
-      const volume = Math.max(0, Math.min(1, soundVolume / 10));
-      osc.type = type;
-      osc.frequency.setValueAtTime(startFreq, now);
-      osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
-      gain.gain.setValueAtTime(volume * 0.16, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-      osc.connect(gain).connect(audioContext.destination);
-      osc.start(now);
-      osc.stop(now + duration);
-    }
-
-    function playSlideSound() {
-      playTone({ startFreq: 240, endFreq: 160, duration: 0.12, type: "triangle" });
-    }
-
-    function playMergeSound() {
-      playTone({ startFreq: 440, endFreq: 660, duration: 0.18, type: "square" });
+    function getOffset(r, c) {
+      const sizePx = boardEl.querySelector(".cell").getBoundingClientRect().width;
+      const styles = getComputedStyle(boardEl);
+      const gap = parseFloat(styles.gap);
+      const padding = parseFloat(styles.paddingLeft);
+      return {
+        x: padding + c * (sizePx + gap),
+        y: padding + r * (sizePx + gap)
+      };
     }
 
     function startGame() {
@@ -598,10 +524,6 @@
       pushHistory(previousState);
       inputLocked = true;
       renderTiles(animations);
-      playSlideSound();
-      if (animations.some((animation) => animation.merge)) {
-        playMergeSound();
-      }
       updateScores();
 
       setTimeout(() => {
@@ -723,25 +645,6 @@
     setupBoard();
     startGame();
     handleTouch();
-
-    volumeSlider.value = String(soundVolume);
-    soundToggleBtn.textContent = soundEnabled ? "Sound: On" : "Sound: Off";
-    soundToggleBtn.setAttribute("aria-pressed", String(soundEnabled));
-
-    soundToggleBtn.addEventListener("click", () => {
-      soundEnabled = !soundEnabled;
-      soundToggleBtn.textContent = soundEnabled ? "Sound: On" : "Sound: Off";
-      soundToggleBtn.setAttribute("aria-pressed", String(soundEnabled));
-      localStorage.setItem("sound-enabled", String(soundEnabled));
-      if (soundEnabled) {
-        ensureAudioContext();
-      }
-    });
-
-    volumeSlider.addEventListener("input", () => {
-      soundVolume = Number(volumeSlider.value);
-      localStorage.setItem("sound-volume", String(soundVolume));
-    });
 
     window.addEventListener("keydown", handleKey);
     newGameBtn.addEventListener("click", confirmReset);
