@@ -247,6 +247,14 @@
           <span>Best</span>
           <strong id="best">0</strong>
         </div>
+        <div class="score-box">
+          <span>Max Tile</span>
+          <strong id="max-tile">0</strong>
+        </div>
+        <div class="score-box">
+          <span>Best Tile</span>
+          <strong id="best-tile">0</strong>
+        </div>
       </div>
       <div class="controls">
         <button id="undo" disabled>Undo</button>
@@ -278,6 +286,8 @@
     const boardEl = document.getElementById("board");
     const scoreEl = document.getElementById("score");
     const bestEl = document.getElementById("best");
+    const maxTileEl = document.getElementById("max-tile");
+    const bestTileEl = document.getElementById("best-tile");
     const messageEl = document.getElementById("message");
     const newGameBtn = document.getElementById("new-game");
     const undoBtn = document.getElementById("undo");
@@ -292,6 +302,8 @@
     let grid = [];
     let score = 0;
     let best = Number(localStorage.getItem("best-score") || 0);
+    let maxTile = 0;
+    let bestTile = Number(localStorage.getItem("best-max-tile") || 0);
     let hasWon = false;
     let inputLocked = false;
     let tileId = 0;
@@ -360,12 +372,31 @@
     }
 
     function updateScores() {
+      refreshMaxTile();
       scoreEl.textContent = score;
       if (score > best) {
         best = score;
         localStorage.setItem("best-score", String(best));
       }
       bestEl.textContent = best;
+      maxTileEl.textContent = maxTile;
+      if (maxTile > bestTile) {
+        bestTile = maxTile;
+        localStorage.setItem("best-max-tile", String(bestTile));
+      }
+      bestTileEl.textContent = bestTile;
+    }
+
+    function refreshMaxTile() {
+      let currentMax = 0;
+      grid.forEach((row) => {
+        row.forEach((tile) => {
+          if (tile && tile.value > currentMax) {
+            currentMax = tile.value;
+          }
+        });
+      });
+      maxTile = currentMax;
     }
 
     function updateSoundUI() {
@@ -554,6 +585,7 @@
       score = 0;
       hasWon = false;
       tileId = 0;
+      maxTile = 0;
       overlay.classList.remove("show");
       messageEl.textContent = "";
       emptyGrid();
