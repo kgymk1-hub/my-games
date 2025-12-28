@@ -184,27 +184,18 @@
     }
 
     @keyframes merge {
-      from { transform: scale(1.12); }
-      to { transform: scale(1); }
-    }
-
-    .merge-flash {
-      position: absolute;
-      width: var(--tile-size);
-      height: var(--tile-size);
-      border-radius: var(--radius);
-      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(255, 214, 255, 0.6), rgba(255, 255, 255, 0.1));
-      box-shadow: 0 0 18px rgba(255, 255, 255, 0.85), 0 0 28px rgba(255, 190, 255, 0.7);
-      pointer-events: none;
-      z-index: 3;
-      animation: merge-flash 0.35s ease-out forwards;
-      mix-blend-mode: screen;
-    }
-
-    @keyframes merge-flash {
-      0% { opacity: 0; transform: scale(0.85); }
-      30% { opacity: 0.9; transform: scale(1); }
-      100% { opacity: 0; transform: scale(1.35); }
+      0% {
+        transform: scale(1.12);
+        box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+      }
+      45% {
+        box-shadow: 0 0 18px rgba(255, 255, 255, 0.85),
+          0 0 28px rgba(255, 190, 255, 0.7);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 10px 18px rgba(41, 19, 84, 0.18);
+      }
     }
 
     .message {
@@ -594,7 +585,6 @@
           if (animation?.pop) tile.classList.add("new");
           if (animation?.merge) {
             tile.classList.add("merge");
-            spawnMergeFlash(offset);
           }
 
           if (!tile.parentElement) {
@@ -609,19 +599,6 @@
           tile.remove();
         }
       });
-    }
-
-    function spawnMergeFlash(offset) {
-      const flash = document.createElement("div");
-      flash.className = "merge-flash";
-      flash.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
-      boardEl.appendChild(flash);
-      flash.addEventListener("animationend", () => flash.remove());
-      setTimeout(() => {
-        if (flash.parentElement) {
-          flash.remove();
-        }
-      }, 500);
     }
 
     function getOffset(r, c) {
