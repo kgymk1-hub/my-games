@@ -124,6 +124,17 @@
       background: var(--accent-strong);
     }
 
+    button.secondary {
+      border: 1px solid #d5dbe6;
+      background: #fff;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.82rem;
+    }
+
     select {
       border-radius: 10px;
       border: 1px solid #d5dbe6;
@@ -189,17 +200,28 @@
         <span>Mines</span>
         <strong id="mines">0</strong>
       </div>
+      <div class="stat">
+        <span>Best</span>
+        <strong id="best">--</strong>
+      </div>
       <div class="controls">
-        <select id="difficulty">
-          <option value="easy">Easy 9×9</option>
-          <option value="normal" selected>Normal 12×12</option>
-          <option value="hard">Hard 16×16</option>
+        <select id="size-select">
+          <option value="9x9">Easy 9×9</option>
+          <option value="12x12" selected>Normal 12×12</option>
+          <option value="16x16">Hard 16×16</option>
+        </select>
+        <select id="density-select">
+          <option value="0.10">0.10 density</option>
+          <option value="0.13" selected>0.13 density</option>
+          <option value="0.16">0.16 density</option>
+          <option value="0.20">0.20 density</option>
         </select>
         <div class="segmented" role="group" aria-label="Mode toggle">
           <button id="mode-open" class="active" type="button">Open</button>
           <button id="mode-flag" type="button">Flag</button>
         </div>
         <button id="restart" class="primary" type="button">Restart</button>
+        <button id="reset-best" class="secondary" type="button">Reset Best</button>
       </div>
     </header>
     <div class="status" id="status"></div>
@@ -213,11 +235,14 @@
     const ctx = canvas.getContext('2d');
     const timerEl = document.getElementById('timer');
     const minesEl = document.getElementById('mines');
+    const bestEl = document.getElementById('best');
     const statusEl = document.getElementById('status');
     const modeOpenBtn = document.getElementById('mode-open');
     const modeFlagBtn = document.getElementById('mode-flag');
     const restartBtn = document.getElementById('restart');
-    const difficultySelect = document.getElementById('difficulty');
+    const resetBestBtn = document.getElementById('reset-best');
+    const sizeSelect = document.getElementById('size-select');
+    const densitySelect = document.getElementById('density-select');
 
     const EVEN_DIRS = [
       [1, 0],
@@ -237,20 +262,13 @@
       [1, -1]
     ];
 
-    const Difficulty = {
-      easy: { W: 9, H: 9, density: 0.1 },
-      normal: { W: 12, H: 12, density: 0.13 },
-      hard: { W: 16, H: 16, density: 0.16 }
-    };
-
     class Game {
       constructor() {
         this.mode = 'open';
-        this.reset('normal');
+        this.reset(getConfigFromControls());
       }
 
-      reset(levelKey) {
-        const { W, H, density } = Difficulty[levelKey];
+      reset({ W, H, density }) {
         this.W = W;
         this.H = H;
         this.density = density;
@@ -398,6 +416,7 @@
           this.gameOver = true;
           this.win = true;
           this.stopTimer();
+          maybeUpdateBestTime(this.elapsed);
           updateUI();
         }
       }
@@ -442,11 +461,47 @@
       startDist: 0,
       startScale: 1,
       startMid: { x: 0, y: 0 },
+      worldMidStart: { x: 0, y: 0 },
       startTx: 0,
       startTy: 0,
+      suppressTap: false,
+      startPoints: new Map(),
       lastTapTime: 0,
       lastTapPos: null
     };
+
+    function getConfigFromControls() {
+      const [W, H] = sizeSelect.value.split('x').map(Number);
+      const density = parseFloat(densitySelect.value);
+      return { W, H, density };
+    }
+
+    function configKey({ W, H, density }) {
+      return `${W}x${H}_${density.toFixed(3)}`;
+    }
+
+    function storageKey(config) {
+      return `hexMinesBest:${configKey(config)}`;
+    }
+
+    function getBestTime(config) {
+      const stored = localStorage.getItem(storageKey(config));
+      if (!stored) return null;
+      const value = Number.parseInt(stored, 10);
+      return Number.isFinite(value) ? value : null;
+    }
+
+    function setBestTime(config, value) {
+      localStorage.setItem(storageKey(config), value.toString());
+    }
+
+    function maybeUpdateBestTime(elapsed) {
+      const config = { W: game.W, H: game.H, density: game.density };
+      const best = getBestTime(config);
+      if (best === null || elapsed < best) {
+        setBestTime(config, elapsed);
+      }
+    }
 
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
@@ -642,8 +697,11 @@
     }
 
     function updateUI() {
+      const config = { W: game.W, H: game.H, density: game.density };
+      const best = getBestTime(config);
       minesEl.textContent = Math.max(0, game.totalMines - game.flags).toString();
       timerEl.textContent = game.elapsed.toString();
+      bestEl.textContent = best === null ? '--' : best.toString();
       if (game.gameOver) {
         if (game.win) {
           statusEl.textContent = 'You cleared the field!';
@@ -708,6 +766,10 @@
       pointerState.startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
       pointerState.startScale = camera.scale;
       pointerState.startMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      pointerState.worldMidStart = {
+        x: (pointerState.startMid.x - camera.tx) / camera.scale,
+        y: (pointerState.startMid.y - camera.ty) / camera.scale
+      };
       pointerState.startTx = camera.tx;
       pointerState.startTy = camera.ty;
     }
@@ -722,9 +784,13 @@
       const b = entries[1][1];
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-      camera.scale = clamp(pointerState.startScale * (dist / pointerState.startDist), 0.6, 3);
-      camera.tx = pointerState.startTx + (mid.x - pointerState.startMid.x);
-      camera.ty = pointerState.startTy + (mid.y - pointerState.startMid.y);
+      const scaleNew = clamp(pointerState.startScale * (dist / pointerState.startDist), 0.6, 3);
+      camera.scale = scaleNew;
+      camera.tx = mid.x - pointerState.worldMidStart.x * camera.scale;
+      camera.ty = mid.y - pointerState.worldMidStart.y * camera.scale;
+      if (Math.hypot(mid.x - pointerState.startMid.x, mid.y - pointerState.startMid.y) > 6) {
+        pointerState.suppressTap = true;
+      }
       requestRender();
     }
 
@@ -760,8 +826,14 @@
       if (event.pointerType === 'mouse' && event.button === 2) return;
       canvas.setPointerCapture(event.pointerId);
       const point = getCanvasPoint(event);
+      if (pointerState.pointers.size === 0) {
+        pointerState.suppressTap = false;
+        pointerState.startPoints.clear();
+      }
       pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
+      pointerState.startPoints.set(event.pointerId, { x: point.x, y: point.y });
       if (pointerState.pointers.size === 2) {
+        pointerState.suppressTap = true;
         startGesture();
       }
       if (!pointerState.gestureActive) {
@@ -775,6 +847,13 @@
       const point = getCanvasPoint(event);
       if (pointerState.pointers.has(event.pointerId)) {
         pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
+        const startPoint = pointerState.startPoints.get(event.pointerId);
+        if (startPoint) {
+          const moved = Math.hypot(point.x - startPoint.x, point.y - startPoint.y);
+          if (moved > 6) {
+            pointerState.suppressTap = true;
+          }
+        }
       }
       if (pointerState.gestureActive) {
         updateGesture();
@@ -802,11 +881,19 @@
       const point = getCanvasPoint(event);
       const wasGesturePointer = pointerState.gesturePointerIds.has(event.pointerId);
       pointerState.pointers.delete(event.pointerId);
+      pointerState.startPoints.delete(event.pointerId);
       if (pointerState.gestureActive) {
         endGestureIfNeeded();
         if (wasGesturePointer) {
           return;
         }
+      }
+      if (pointerState.suppressTap) {
+        if (pointerState.pointers.size === 0) {
+          pointerState.suppressTap = false;
+          pointerState.startPoints.clear();
+        }
+        return;
       }
       const cell = pointerToCell(event);
       renderer.hoverCell = cell;
@@ -823,6 +910,7 @@
 
     canvas.addEventListener('pointercancel', event => {
       pointerState.pointers.delete(event.pointerId);
+      pointerState.startPoints.delete(event.pointerId);
       endGestureIfNeeded();
     });
 
@@ -835,17 +923,26 @@
 
     restartBtn.addEventListener('click', () => {
       game.stopTimer();
-      game.reset(difficultySelect.value);
+      game.reset(getConfigFromControls());
       setMode('open');
       resizeCanvas();
     });
 
-    difficultySelect.addEventListener('change', () => {
+    resetBestBtn.addEventListener('click', () => {
+      const config = getConfigFromControls();
+      localStorage.removeItem(storageKey(config));
+      updateUI();
+    });
+
+    function handleConfigChange() {
       game.stopTimer();
-      game.reset(difficultySelect.value);
+      game.reset(getConfigFromControls());
       setMode('open');
       resizeCanvas();
-    });
+    }
+
+    sizeSelect.addEventListener('change', handleConfigChange);
+    densitySelect.addEventListener('change', handleConfigChange);
 
     window.addEventListener('resize', resizeCanvas);
 
