@@ -429,15 +429,34 @@
 
     function fitBoard() {
       const padding = 16;
-      const usableWidth = canvas.clientWidth - padding * 2;
-      const usableHeight = canvas.clientHeight - padding * 2;
-      const sizeX = usableWidth / ((Math.sqrt(3) * (game.W - 1)) + Math.sqrt(3));
-      const sizeY = usableHeight / ((1.5 * (game.H - 1)) + 2);
+      const cw = canvas.clientWidth;
+      const ch = canvas.clientHeight;
+
+      const usableW = cw - padding * 2;
+      const usableH = ch - padding * 2;
+
+      // pointy-top axial mapping:
+      // x = originX + sqrt(3)*s*(q + r/2)
+      // y = originY + 1.5*s*r
+      // board extents for q:[0..W-1], r:[0..H-1]
+      const widthCoeff = Math.sqrt(3) * (game.W + (game.H - 1) / 2);
+      const heightCoeff = 1.5 * (game.H - 1) + 2;
+
+      const sizeX = usableW / widthCoeff;
+      const sizeY = usableH / heightCoeff;
+
       renderer.size = Math.max(12, Math.min(sizeX, sizeY));
-      const gridWidth = Math.sqrt(3) * renderer.size * (game.W - 1) + Math.sqrt(3) * renderer.size;
-      const gridHeight = renderer.size * (1.5 * (game.H - 1) + 2);
-      renderer.originX = (canvas.clientWidth - gridWidth) / 2 + padding + Math.sqrt(3) * renderer.size / 2;
-      renderer.originY = (canvas.clientHeight - gridHeight) / 2 + padding + renderer.size;
+
+      const totalW = Math.sqrt(3) * renderer.size * (game.W + (game.H - 1) / 2);
+      const totalH = renderer.size * (1.5 * (game.H - 1) + 2);
+
+      // origin is center of (q=0,r=0)
+      // leftmost edge is originX - sqrt(3)*s/2
+      // top edge is originY - s
+      renderer.originX =
+        padding + (usableW - totalW) / 2 + (Math.sqrt(3) * renderer.size) / 2;
+      renderer.originY =
+        padding + (usableH - totalH) / 2 + renderer.size;
     }
 
     function axialToPixel(q, r) {
