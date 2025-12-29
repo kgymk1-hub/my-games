@@ -173,6 +173,12 @@
       touch-action: none;
     }
 
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0 6px 4px;
+    }
+
     @media (max-width: 600px) {
       header {
         padding: 8px 10px;
@@ -206,27 +212,32 @@
       </div>
       <div class="controls">
         <select id="size-select">
-          <option value="9x9">Easy 9×9</option>
           <option value="12x12" selected>Normal 12×12</option>
           <option value="16x16">Hard 16×16</option>
+          <option value="20x18">Expert 20×18</option>
+          <option value="24x20">Master 24×20</option>
+          <option value="28x20">Extreme 28×20</option>
         </select>
         <select id="density-select">
-          <option value="0.10">0.10 density</option>
-          <option value="0.13" selected>0.13 density</option>
-          <option value="0.16">0.16 density</option>
-          <option value="0.20">0.20 density</option>
+          <option value="0.14">0.14 density</option>
+          <option value="0.18" selected>0.18 density</option>
+          <option value="0.22">0.22 density</option>
+          <option value="0.26">0.26 density</option>
+          <option value="0.30">0.30 density</option>
         </select>
         <div class="segmented" role="group" aria-label="Mode toggle">
           <button id="mode-open" class="active" type="button">Open</button>
           <button id="mode-flag" type="button">Flag</button>
         </div>
         <button id="restart" class="primary" type="button">Restart</button>
-        <button id="reset-best" class="secondary" type="button">Reset Best</button>
       </div>
     </header>
     <div class="status" id="status"></div>
     <div class="canvas-wrap">
       <canvas id="board" width="800" height="600"></canvas>
+    </div>
+    <div class="footer">
+      <button id="reset-best" class="secondary" type="button">Reset Best</button>
     </div>
   </div>
 
@@ -262,6 +273,15 @@
       [1, -1]
     ];
 
+    let winFx = null;
+    const winFxDuration = 2000;
+
+    const resetBestState = {
+      armed: false,
+      timeoutId: null,
+      defaultLabel: resetBestBtn.textContent
+    };
+
     class Game {
       constructor() {
         this.mode = 'open';
@@ -290,6 +310,7 @@
         this.elapsed = 0;
         this.timerId = null;
         this.highlight = null;
+        winFx = null;
         if (game) updateUI();
       }
 
@@ -417,6 +438,7 @@
           this.win = true;
           this.stopTimer();
           maybeUpdateBestTime(this.elapsed);
+          startWinFx();
           updateUI();
         }
       }
@@ -574,7 +596,7 @@
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
+        const angle = Math.PI / 180 * (60 * i + 60);
         const px = x + size * Math.cos(angle);
         const py = y + size * Math.sin(angle);
         if (i === 0) ctx.moveTo(px, py);
@@ -641,6 +663,78 @@
       ctx.fillText(number.toString(), x, y + 1);
     }
 
+    function startWinFx() {
+      const centerX = canvas.clientWidth / 2;
+      const centerY = canvas.clientHeight / 2;
+      const colors = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#7c3aed', '#0ea5e9'];
+      const particles = Array.from({ length: 42 }, () => {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 80 + Math.random() * 140;
+        return {
+          x: centerX,
+          y: centerY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 40,
+          size: 4 + Math.random() * 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * Math.PI
+        };
+      });
+      winFx = { start: performance.now(), particles };
+      requestRender();
+    }
+
+    function renderWinFx() {
+      if (!winFx) return;
+      const now = performance.now();
+      const elapsed = (now - winFx.start) / 1000;
+      const duration = winFxDuration / 1000;
+      if (elapsed > duration) {
+        winFx = null;
+        return;
+      }
+      const progress = elapsed / duration;
+      const alpha = Math.max(0, 1 - progress);
+      const centerX = canvas.clientWidth / 2;
+      const centerY = canvas.clientHeight / 2;
+      const popPhase = Math.min(progress / 0.25, 1);
+      const popScale = 1 + Math.sin(popPhase * Math.PI) * 0.2;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#15803d';
+      ctx.font = `700 ${48 * popScale}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
+      ctx.shadowBlur = 12;
+      ctx.fillText('CLEAR!', centerX, centerY - 10);
+      ctx.restore();
+
+      const gravity = 140;
+      winFx.particles.forEach(p => {
+        const px = p.x + p.vx * elapsed;
+        const py = p.y + p.vy * elapsed + 0.5 * gravity * elapsed * elapsed;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(px, py);
+        ctx.rotate(p.rotation + elapsed * 3);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 1.4);
+        ctx.restore();
+      });
+
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      const ringRadius = 40 + 120 * progress;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function render() {
       if (!renderer.needsRender) return;
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
@@ -680,6 +774,7 @@
         }
       }
       ctx.restore();
+      renderWinFx();
       renderer.needsRender = false;
     }
 
@@ -692,6 +787,9 @@
     }
 
     function loop() {
+      if (winFx && performance.now() - winFx.start < winFxDuration) {
+        requestRender();
+      }
       render();
       requestAnimationFrame(loop);
     }
@@ -922,6 +1020,7 @@
     modeFlagBtn.addEventListener('click', () => setMode('flag'));
 
     restartBtn.addEventListener('click', () => {
+      resetResetBestPrompt();
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
@@ -929,12 +1028,25 @@
     });
 
     resetBestBtn.addEventListener('click', () => {
-      const config = getConfigFromControls();
-      localStorage.removeItem(storageKey(config));
-      updateUI();
+      if (resetBestState.armed) {
+        const config = getConfigFromControls();
+        localStorage.removeItem(storageKey(config));
+        resetResetBestPrompt();
+        updateUI();
+        return;
+      }
+      resetBestState.armed = true;
+      resetBestBtn.textContent = 'Tap again to confirm';
+      if (resetBestState.timeoutId) {
+        clearTimeout(resetBestState.timeoutId);
+      }
+      resetBestState.timeoutId = setTimeout(() => {
+        resetResetBestPrompt();
+      }, 3000);
     });
 
     function handleConfigChange() {
+      resetResetBestPrompt();
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
@@ -950,6 +1062,15 @@
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function resetResetBestPrompt() {
+      resetBestState.armed = false;
+      resetBestBtn.textContent = resetBestState.defaultLabel;
+      if (resetBestState.timeoutId) {
+        clearTimeout(resetBestState.timeoutId);
+        resetBestState.timeoutId = null;
       }
     }
 
