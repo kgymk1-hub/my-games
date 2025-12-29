@@ -263,7 +263,7 @@
         this.elapsed = 0;
         this.timerId = null;
         this.highlight = null;
-        updateUI();
+        if (game) updateUI();
       }
 
       cell(q, r) {
@@ -408,7 +408,8 @@
       }
     }
 
-    const game = new Game();
+    let game = null;
+    game = new Game();
 
     const renderer = {
       size: 24,
