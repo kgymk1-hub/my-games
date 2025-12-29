@@ -219,13 +219,22 @@
     const restartBtn = document.getElementById('restart');
     const difficultySelect = document.getElementById('difficulty');
 
-    const DIRS = [
+    const EVEN_DIRS = [
       [1, 0],
-      [1, -1],
-      [0, -1],
-      [-1, 0],
+      [0, 1],
       [-1, 1],
-      [0, 1]
+      [-1, 0],
+      [-1, -1],
+      [0, -1]
+    ];
+
+    const ODD_DIRS = [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [-1, 0],
+      [0, -1],
+      [1, -1]
     ];
 
     const Difficulty = {
@@ -247,12 +256,12 @@
         this.density = density;
         this.totalMines = Math.max(1, Math.floor(W * H * density));
         this.board = [];
-        for (let r = 0; r < H; r++) {
-          const row = [];
-          for (let q = 0; q < W; q++) {
-            row.push({ q, r, isMine: false, number: 0, state: 'closed' });
+        for (let row = 0; row < H; row++) {
+          const rowCells = [];
+          for (let col = 0; col < W; col++) {
+            rowCells.push({ col, row, isMine: false, number: 0, state: 'closed' });
           }
-          this.board.push(row);
+          this.board.push(rowCells);
         }
         this.started = false;
         this.gameOver = false;
@@ -266,27 +275,28 @@
         if (game) updateUI();
       }
 
-      cell(q, r) {
-        if (q < 0 || q >= this.W || r < 0 || r >= this.H) return null;
-        return this.board[r][q];
+      cell(col, row) {
+        if (col < 0 || col >= this.W || row < 0 || row >= this.H) return null;
+        return this.board[row][col];
       }
 
-      neighbors(q, r) {
-        return DIRS.map(([dq, dr]) => this.cell(q + dq, r + dr)).filter(Boolean);
+      neighbors(col, row) {
+        const dirs = row % 2 === 0 ? EVEN_DIRS : ODD_DIRS;
+        return dirs.map(([dc, dr]) => this.cell(col + dc, row + dr)).filter(Boolean);
       }
 
       placeMinesSafe(startCell) {
         const forbidden = new Set();
-        forbidden.add(`${startCell.q},${startCell.r}`);
-        this.neighbors(startCell.q, startCell.r).forEach(cell => {
-          forbidden.add(`${cell.q},${cell.r}`);
+        forbidden.add(`${startCell.col},${startCell.row}`);
+        this.neighbors(startCell.col, startCell.row).forEach(cell => {
+          forbidden.add(`${cell.col},${cell.row}`);
         });
         const candidates = [];
-        for (let r = 0; r < this.H; r++) {
-          for (let q = 0; q < this.W; q++) {
-            const key = `${q},${r}`;
+        for (let row = 0; row < this.H; row++) {
+          for (let col = 0; col < this.W; col++) {
+            const key = `${col},${row}`;
             if (!forbidden.has(key)) {
-              candidates.push(this.board[r][q]);
+              candidates.push(this.board[row][col]);
             }
           }
         }
@@ -300,13 +310,13 @@
       }
 
       computeNumbers() {
-        for (let r = 0; r < this.H; r++) {
-          for (let q = 0; q < this.W; q++) {
-            const cell = this.board[r][q];
+        for (let row = 0; row < this.H; row++) {
+          for (let col = 0; col < this.W; col++) {
+            const cell = this.board[row][col];
             if (cell.isMine) {
               cell.number = 0;
             } else {
-              cell.number = this.neighbors(q, r).filter(n => n.isMine).length;
+              cell.number = this.neighbors(col, row).filter(n => n.isMine).length;
             }
           }
         }
@@ -354,7 +364,7 @@
           if (cell.state !== 'closed') continue;
           cell.state = 'open';
           if (cell.number === 0) {
-            this.neighbors(cell.q, cell.r).forEach(n => {
+            this.neighbors(cell.col, cell.row).forEach(n => {
               if (n.state === 'closed') {
                 queue.push(n);
               }
@@ -364,9 +374,9 @@
       }
 
       revealMines() {
-        for (let r = 0; r < this.H; r++) {
-          for (let q = 0; q < this.W; q++) {
-            const cell = this.board[r][q];
+        for (let row = 0; row < this.H; row++) {
+          for (let col = 0; col < this.W; col++) {
+            const cell = this.board[row][col];
             if (cell.isMine) {
               cell.state = 'open';
             }
@@ -377,9 +387,9 @@
       checkWin() {
         let openCount = 0;
         let safeCount = 0;
-        for (let r = 0; r < this.H; r++) {
-          for (let q = 0; q < this.W; q++) {
-            const cell = this.board[r][q];
+        for (let row = 0; row < this.H; row++) {
+          for (let col = 0; col < this.W; col++) {
+            const cell = this.board[row][col];
             if (!cell.isMine) safeCount++;
             if (cell.state === 'open' && !cell.isMine) openCount++;
           }
@@ -419,6 +429,25 @@
       needsRender: true
     };
 
+    const camera = {
+      scale: 1,
+      tx: 0,
+      ty: 0
+    };
+
+    const pointerState = {
+      pointers: new Map(),
+      gestureActive: false,
+      gesturePointerIds: new Set(),
+      startDist: 0,
+      startScale: 1,
+      startMid: { x: 0, y: 0 },
+      startTx: 0,
+      startTy: 0,
+      lastTapTime: 0,
+      lastTapPos: null
+    };
+
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.floor(rect.width * devicePixelRatio);
@@ -433,65 +462,58 @@
       const cw = canvas.clientWidth;
       const ch = canvas.clientHeight;
 
-      const usableW = cw - padding * 2;
-      const usableH = ch - padding * 2;
+      const usableW = Math.max(0, cw - padding * 2);
+      const usableH = Math.max(0, ch - padding * 2);
 
-      // pointy-top axial mapping:
-      // x = originX + sqrt(3)*s*(q + r/2)
-      // y = originY + 1.5*s*r
-      // board extents for q:[0..W-1], r:[0..H-1]
-      const widthCoeff = Math.sqrt(3) * (game.W + (game.H - 1) / 2);
+      const widthCoeff = Math.sqrt(3) * (game.W + 0.5);
       const heightCoeff = 1.5 * (game.H - 1) + 2;
 
       const sizeX = usableW / widthCoeff;
       const sizeY = usableH / heightCoeff;
 
-      renderer.size = Math.max(12, Math.min(sizeX, sizeY));
+      renderer.size = Math.max(4, Math.min(sizeX, sizeY));
 
-      const totalW = Math.sqrt(3) * renderer.size * (game.W + (game.H - 1) / 2);
+      const hexW = Math.sqrt(3) * renderer.size;
+      const totalW = hexW * (game.W + 0.5);
       const totalH = renderer.size * (1.5 * (game.H - 1) + 2);
 
-      // origin is center of (q=0,r=0)
-      // leftmost edge is originX - sqrt(3)*s/2
-      // top edge is originY - s
-      renderer.originX =
-        padding + (usableW - totalW) / 2 + (Math.sqrt(3) * renderer.size) / 2;
-      renderer.originY =
-        padding + (usableH - totalH) / 2 + renderer.size;
+      renderer.originX = padding + (usableW - totalW) / 2 + hexW / 2;
+      renderer.originY = padding + (usableH - totalH) / 2 + renderer.size;
+
+      camera.scale = 1;
+      camera.tx = 0;
+      camera.ty = 0;
     }
 
-    function axialToPixel(q, r) {
-      const x = renderer.originX + renderer.size * Math.sqrt(3) * (q + r / 2);
-      const y = renderer.originY + renderer.size * 1.5 * r;
+    function offsetToPixel(col, row) {
+      const hexW = Math.sqrt(3) * renderer.size;
+      const x = renderer.originX + hexW * (col + 0.5 * (row % 2));
+      const y = renderer.originY + renderer.size * 1.5 * row;
       return { x, y };
     }
 
-    function pixelToAxial(x, y) {
-      const px = x - renderer.originX;
-      const py = y - renderer.originY;
-      const q = (Math.sqrt(3) / 3 * px - 1 / 3 * py) / renderer.size;
-      const r = (2 / 3 * py) / renderer.size;
-      return hexRound(q, r);
-    }
-
-    function hexRound(q, r) {
-      let x = q;
-      let z = r;
-      let y = -x - z;
-      let rx = Math.round(x);
-      let ry = Math.round(y);
-      let rz = Math.round(z);
-      const xDiff = Math.abs(rx - x);
-      const yDiff = Math.abs(ry - y);
-      const zDiff = Math.abs(rz - z);
-      if (xDiff > yDiff && xDiff > zDiff) {
-        rx = -ry - rz;
-      } else if (yDiff > zDiff) {
-        ry = -rx - rz;
-      } else {
-        rz = -rx - ry;
+    function pixelToCell(x, y) {
+      const hexW = Math.sqrt(3) * renderer.size;
+      const approxRow = Math.round((y - renderer.originY) / (1.5 * renderer.size));
+      const row = Math.max(0, Math.min(game.H - 1, approxRow));
+      const approxCol = Math.round((x - renderer.originX) / hexW - 0.5 * (row % 2));
+      let best = null;
+      let bestDist = Infinity;
+      for (let r = row - 1; r <= row + 1; r++) {
+        for (let c = approxCol - 1; c <= approxCol + 1; c++) {
+          const cell = game.cell(c, r);
+          if (!cell) continue;
+          const center = offsetToPixel(c, r);
+          const dx = x - center.x;
+          const dy = y - center.y;
+          const dist = dx * dx + dy * dy;
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = { col: c, row: r };
+          }
+        }
       }
-      return { q: rx, r: rz };
+      return best;
     }
 
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
@@ -567,11 +589,14 @@
     function render() {
       if (!renderer.needsRender) return;
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-      for (let r = 0; r < game.H; r++) {
-        for (let q = 0; q < game.W; q++) {
-          const cell = game.cell(q, r);
-          const { x, y } = axialToPixel(q, r);
-          const isHover = renderer.hoverCell && renderer.hoverCell.q === q && renderer.hoverCell.r === r;
+      ctx.save();
+      ctx.translate(camera.tx, camera.ty);
+      ctx.scale(camera.scale, camera.scale);
+      for (let row = 0; row < game.H; row++) {
+        for (let col = 0; col < game.W; col++) {
+          const cell = game.cell(col, row);
+          const { x, y } = offsetToPixel(col, row);
+          const isHover = renderer.hoverCell && renderer.hoverCell.col === col && renderer.hoverCell.row === row;
           const fill = cell.state === 'open' ? getCss('--tile-open') : getCss('--tile-closed');
           const stroke = getCss('--tile-outline');
           drawHex(x, y, renderer.size * 0.95, fill, stroke, 1);
@@ -599,6 +624,7 @@
           }
         }
       }
+      ctx.restore();
       renderer.needsRender = false;
     }
 
@@ -651,31 +677,115 @@
       updateUI();
     }
 
-    function pointerToCell(event) {
+    function getCanvasPoint(event) {
       const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const { q, r } = pixelToAxial(x, y);
-      const cell = game.cell(q, r);
-      if (!cell) return null;
-      return cell;
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function pointerToCell(event) {
+      const point = getCanvasPoint(event);
+      const wx = (point.x - camera.tx) / camera.scale;
+      const wy = (point.y - camera.ty) / camera.scale;
+      const hit = pixelToCell(wx, wy);
+      if (!hit) return null;
+      return game.cell(hit.col, hit.row);
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function startGesture() {
+      if (pointerState.pointers.size < 2) return;
+      const entries = Array.from(pointerState.pointers.entries()).slice(0, 2);
+      const [aId, a] = entries[0];
+      const [bId, b] = entries[1];
+      pointerState.gestureActive = true;
+      pointerState.gesturePointerIds = new Set([aId, bId]);
+      pointerState.startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      pointerState.startScale = camera.scale;
+      pointerState.startMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      pointerState.startTx = camera.tx;
+      pointerState.startTy = camera.ty;
+    }
+
+    function updateGesture() {
+      if (!pointerState.gestureActive || pointerState.pointers.size < 2) return;
+      const entries = Array.from(pointerState.pointers.entries()).filter(([id]) =>
+        pointerState.gesturePointerIds.has(id)
+      );
+      if (entries.length < 2) return;
+      const a = entries[0][1];
+      const b = entries[1][1];
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      camera.scale = clamp(pointerState.startScale * (dist / pointerState.startDist), 0.6, 3);
+      camera.tx = pointerState.startTx + (mid.x - pointerState.startMid.x);
+      camera.ty = pointerState.startTy + (mid.y - pointerState.startMid.y);
+      requestRender();
+    }
+
+    function endGestureIfNeeded() {
+      if (pointerState.pointers.size < 2) {
+        pointerState.gestureActive = false;
+        pointerState.gesturePointerIds.clear();
+      }
+    }
+
+    function handleDoubleTap(point, event) {
+      if (event.pointerType === 'mouse') return false;
+      const now = performance.now();
+      if (pointerState.lastTapTime && now - pointerState.lastTapTime < 300) {
+        const prev = pointerState.lastTapPos;
+        if (prev) {
+          const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
+          if (dist < 24) {
+            fitBoard();
+            requestRender();
+            pointerState.lastTapTime = 0;
+            pointerState.lastTapPos = null;
+            return true;
+          }
+        }
+      }
+      pointerState.lastTapTime = now;
+      pointerState.lastTapPos = point;
+      return false;
     }
 
     canvas.addEventListener('pointerdown', event => {
       if (event.pointerType === 'mouse' && event.button === 2) return;
       canvas.setPointerCapture(event.pointerId);
-      const cell = pointerToCell(event);
-      renderer.hoverCell = cell;
-      requestRender();
+      const point = getCanvasPoint(event);
+      pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
+      if (pointerState.pointers.size === 2) {
+        startGesture();
+      }
+      if (!pointerState.gestureActive) {
+        const cell = pointerToCell(event);
+        renderer.hoverCell = cell;
+        requestRender();
+      }
     });
 
     canvas.addEventListener('pointermove', event => {
+      const point = getCanvasPoint(event);
+      if (pointerState.pointers.has(event.pointerId)) {
+        pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
+      }
+      if (pointerState.gestureActive) {
+        updateGesture();
+        return;
+      }
       const cell = pointerToCell(event);
       if (
         renderer.hoverCell &&
         cell &&
-        renderer.hoverCell.q === cell.q &&
-        renderer.hoverCell.r === cell.r
+        renderer.hoverCell.col === cell.col &&
+        renderer.hoverCell.row === cell.row
       ) {
         return;
       }
@@ -689,6 +799,15 @@
     });
 
     canvas.addEventListener('pointerup', event => {
+      const point = getCanvasPoint(event);
+      const wasGesturePointer = pointerState.gesturePointerIds.has(event.pointerId);
+      pointerState.pointers.delete(event.pointerId);
+      if (pointerState.gestureActive) {
+        endGestureIfNeeded();
+        if (wasGesturePointer) {
+          return;
+        }
+      }
       const cell = pointerToCell(event);
       renderer.hoverCell = cell;
       if (event.pointerType === 'mouse' && event.button === 2) {
@@ -696,7 +815,15 @@
       } else {
         handleAction(cell, game.mode);
       }
+      if (handleDoubleTap(point, event)) {
+        renderer.hoverCell = null;
+      }
       requestRender();
+    });
+
+    canvas.addEventListener('pointercancel', event => {
+      pointerState.pointers.delete(event.pointerId);
+      endGestureIfNeeded();
     });
 
     canvas.addEventListener('contextmenu', event => {
