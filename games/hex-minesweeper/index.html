@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hex Minesweeper</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #1b1f24;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-strong: #1d4ed8;
+      --danger: #dc2626;
+      --tile: #d9e2ec;
+      --tile-closed: #c9d4e3;
+      --tile-open: #f2f6fb;
+      --tile-outline: #a8b4c6;
+      --highlight: rgba(37, 99, 235, 0.2);
+      --flag: #e11d48;
+      --mine: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 14px 18px;
+      gap: 10px;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      background: var(--panel);
+      padding: 10px 12px;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: #f0f4fa;
+      min-width: 88px;
+    }
+
+    .stat span {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat strong {
+      font-size: 1.1rem;
+    }
+
+    .controls {
+      display: flex;
+      flex: 1 1 auto;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .segmented {
+      display: inline-flex;
+      background: #edf1f7;
+      border-radius: 999px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .segmented button {
+      border: none;
+      background: transparent;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      min-width: 72px;
+    }
+
+    .segmented button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button.primary {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.primary:active {
+      background: var(--accent-strong);
+    }
+
+    select {
+      border-radius: 10px;
+      border: 1px solid #d5dbe6;
+      padding: 8px 10px;
+      background: #fff;
+      font-weight: 600;
+    }
+
+    .status {
+      font-weight: 600;
+      color: var(--muted);
+      min-height: 20px;
+    }
+
+    .status.win {
+      color: #15803d;
+    }
+
+    .status.lose {
+      color: var(--danger);
+    }
+
+    .canvas-wrap {
+      background: var(--panel);
+      border-radius: 18px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+      padding: 10px;
+      flex: 1;
+    }
+
+    canvas {
+      width: 100%;
+      height: min(75vh, 620px);
+      display: block;
+      border-radius: 12px;
+      touch-action: none;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        padding: 8px 10px;
+      }
+
+      .stat {
+        min-width: 76px;
+      }
+
+      .segmented button {
+        min-width: 64px;
+        padding: 6px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="stat">
+        <span>Timer</span>
+        <strong id="timer">0</strong>
+      </div>
+      <div class="stat">
+        <span>Mines</span>
+        <strong id="mines">0</strong>
+      </div>
+      <div class="controls">
+        <select id="difficulty">
+          <option value="easy">Easy 9×9</option>
+          <option value="normal" selected>Normal 12×12</option>
+          <option value="hard">Hard 16×16</option>
+        </select>
+        <div class="segmented" role="group" aria-label="Mode toggle">
+          <button id="mode-open" class="active" type="button">Open</button>
+          <button id="mode-flag" type="button">Flag</button>
+        </div>
+        <button id="restart" class="primary" type="button">Restart</button>
+      </div>
+    </header>
+    <div class="status" id="status"></div>
+    <div class="canvas-wrap">
+      <canvas id="board" width="800" height="600"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('board');
+    const ctx = canvas.getContext('2d');
+    const timerEl = document.getElementById('timer');
+    const minesEl = document.getElementById('mines');
+    const statusEl = document.getElementById('status');
+    const modeOpenBtn = document.getElementById('mode-open');
+    const modeFlagBtn = document.getElementById('mode-flag');
+    const restartBtn = document.getElementById('restart');
+    const difficultySelect = document.getElementById('difficulty');
+
+    const DIRS = [
+      [1, 0],
+      [1, -1],
+      [0, -1],
+      [-1, 0],
+      [-1, 1],
+      [0, 1]
+    ];
+
+    const Difficulty = {
+      easy: { W: 9, H: 9, density: 0.1 },
+      normal: { W: 12, H: 12, density: 0.13 },
+      hard: { W: 16, H: 16, density: 0.16 }
+    };
+
+    class Game {
+      constructor() {
+        this.mode = 'open';
+        this.reset('normal');
+      }
+
+      reset(levelKey) {
+        const { W, H, density } = Difficulty[levelKey];
+        this.W = W;
+        this.H = H;
+        this.density = density;
+        this.totalMines = Math.max(1, Math.floor(W * H * density));
+        this.board = [];
+        for (let r = 0; r < H; r++) {
+          const row = [];
+          for (let q = 0; q < W; q++) {
+            row.push({ q, r, isMine: false, number: 0, state: 'closed' });
+          }
+          this.board.push(row);
+        }
+        this.started = false;
+        this.gameOver = false;
+        this.win = false;
+        this.flags = 0;
+        this.firstCell = null;
+        this.startTime = null;
+        this.elapsed = 0;
+        this.timerId = null;
+        this.highlight = null;
+        updateUI();
+      }
+
+      cell(q, r) {
+        if (q < 0 || q >= this.W || r < 0 || r >= this.H) return null;
+        return this.board[r][q];
+      }
+
+      neighbors(q, r) {
+        return DIRS.map(([dq, dr]) => this.cell(q + dq, r + dr)).filter(Boolean);
+      }
+
+      placeMinesSafe(startCell) {
+        const forbidden = new Set();
+        forbidden.add(`${startCell.q},${startCell.r}`);
+        this.neighbors(startCell.q, startCell.r).forEach(cell => {
+          forbidden.add(`${cell.q},${cell.r}`);
+        });
+        const candidates = [];
+        for (let r = 0; r < this.H; r++) {
+          for (let q = 0; q < this.W; q++) {
+            const key = `${q},${r}`;
+            if (!forbidden.has(key)) {
+              candidates.push(this.board[r][q]);
+            }
+          }
+        }
+        const minesToPlace = Math.min(this.totalMines, candidates.length);
+        shuffle(candidates);
+        for (let i = 0; i < minesToPlace; i++) {
+          candidates[i].isMine = true;
+        }
+        this.totalMines = minesToPlace;
+        this.computeNumbers();
+      }
+
+      computeNumbers() {
+        for (let r = 0; r < this.H; r++) {
+          for (let q = 0; q < this.W; q++) {
+            const cell = this.board[r][q];
+            if (cell.isMine) {
+              cell.number = 0;
+            } else {
+              cell.number = this.neighbors(q, r).filter(n => n.isMine).length;
+            }
+          }
+        }
+      }
+
+      toggleFlag(cell) {
+        if (this.gameOver || cell.state === 'open') return;
+        if (cell.state === 'flag') {
+          cell.state = 'closed';
+          this.flags = Math.max(0, this.flags - 1);
+        } else if (cell.state === 'closed') {
+          cell.state = 'flag';
+          this.flags += 1;
+        }
+        if (navigator.vibrate) {
+          navigator.vibrate(10);
+        }
+        updateUI();
+      }
+
+      openCell(cell) {
+        if (this.gameOver || cell.state !== 'closed') return;
+        if (!this.started) {
+          this.started = true;
+          this.firstCell = cell;
+          this.placeMinesSafe(cell);
+          this.startTimer();
+        }
+        if (cell.isMine) {
+          cell.state = 'open';
+          this.gameOver = true;
+          this.revealMines();
+          this.stopTimer();
+          updateUI();
+          return;
+        }
+        this.floodOpen(cell);
+        this.checkWin();
+      }
+
+      floodOpen(startCell) {
+        const queue = [startCell];
+        while (queue.length) {
+          const cell = queue.shift();
+          if (cell.state !== 'closed') continue;
+          cell.state = 'open';
+          if (cell.number === 0) {
+            this.neighbors(cell.q, cell.r).forEach(n => {
+              if (n.state === 'closed') {
+                queue.push(n);
+              }
+            });
+          }
+        }
+      }
+
+      revealMines() {
+        for (let r = 0; r < this.H; r++) {
+          for (let q = 0; q < this.W; q++) {
+            const cell = this.board[r][q];
+            if (cell.isMine) {
+              cell.state = 'open';
+            }
+          }
+        }
+      }
+
+      checkWin() {
+        let openCount = 0;
+        let safeCount = 0;
+        for (let r = 0; r < this.H; r++) {
+          for (let q = 0; q < this.W; q++) {
+            const cell = this.board[r][q];
+            if (!cell.isMine) safeCount++;
+            if (cell.state === 'open' && !cell.isMine) openCount++;
+          }
+        }
+        if (openCount === safeCount && !this.gameOver) {
+          this.gameOver = true;
+          this.win = true;
+          this.stopTimer();
+          updateUI();
+        }
+      }
+
+      startTimer() {
+        this.startTime = performance.now();
+        this.timerId = setInterval(() => {
+          this.elapsed = Math.floor((performance.now() - this.startTime) / 1000);
+          timerEl.textContent = this.elapsed;
+        }, 250);
+      }
+
+      stopTimer() {
+        if (this.timerId) {
+          clearInterval(this.timerId);
+          this.timerId = null;
+        }
+      }
+    }
+
+    const game = new Game();
+
+    const renderer = {
+      size: 24,
+      originX: 0,
+      originY: 0,
+      hoverCell: null,
+      needsRender: true
+    };
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * devicePixelRatio);
+      canvas.height = Math.floor(rect.height * devicePixelRatio);
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      fitBoard();
+      requestRender();
+    }
+
+    function fitBoard() {
+      const padding = 16;
+      const usableWidth = canvas.clientWidth - padding * 2;
+      const usableHeight = canvas.clientHeight - padding * 2;
+      const sizeX = usableWidth / ((Math.sqrt(3) * (game.W - 1)) + Math.sqrt(3));
+      const sizeY = usableHeight / ((1.5 * (game.H - 1)) + 2);
+      renderer.size = Math.max(12, Math.min(sizeX, sizeY));
+      const gridWidth = Math.sqrt(3) * renderer.size * (game.W - 1) + Math.sqrt(3) * renderer.size;
+      const gridHeight = renderer.size * (1.5 * (game.H - 1) + 2);
+      renderer.originX = (canvas.clientWidth - gridWidth) / 2 + padding + Math.sqrt(3) * renderer.size / 2;
+      renderer.originY = (canvas.clientHeight - gridHeight) / 2 + padding + renderer.size;
+    }
+
+    function axialToPixel(q, r) {
+      const x = renderer.originX + renderer.size * Math.sqrt(3) * (q + r / 2);
+      const y = renderer.originY + renderer.size * 1.5 * r;
+      return { x, y };
+    }
+
+    function pixelToAxial(x, y) {
+      const px = x - renderer.originX;
+      const py = y - renderer.originY;
+      const q = (Math.sqrt(3) / 3 * px - 1 / 3 * py) / renderer.size;
+      const r = (2 / 3 * py) / renderer.size;
+      return hexRound(q, r);
+    }
+
+    function hexRound(q, r) {
+      let x = q;
+      let z = r;
+      let y = -x - z;
+      let rx = Math.round(x);
+      let ry = Math.round(y);
+      let rz = Math.round(z);
+      const xDiff = Math.abs(rx - x);
+      const yDiff = Math.abs(ry - y);
+      const zDiff = Math.abs(rz - z);
+      if (xDiff > yDiff && xDiff > zDiff) {
+        rx = -ry - rz;
+      } else if (yDiff > zDiff) {
+        ry = -rx - rz;
+      } else {
+        rz = -rx - ry;
+      }
+      return { q: rx, r: rz };
+    }
+
+    function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.PI / 180 * (60 * i - 30);
+        const px = x + size * Math.cos(angle);
+        const py = y + size * Math.sin(angle);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fillStyle;
+      ctx.fill();
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+    }
+
+    function drawFlag(x, y, size, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = Math.max(2, size * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(x - size * 0.1, y + size * 0.35);
+      ctx.lineTo(x - size * 0.1, y - size * 0.45);
+      ctx.stroke();
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--flag');
+      ctx.beginPath();
+      ctx.moveTo(x - size * 0.1, y - size * 0.45);
+      ctx.lineTo(x + size * 0.55, y - size * 0.25);
+      ctx.lineTo(x - size * 0.1, y - size * 0.05);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawMine(x, y, size) {
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--mine');
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = size * 0.08;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const angle = Math.PI / 4 * i;
+        const inner = size * 0.5;
+        const outer = size * 0.75;
+        ctx.moveTo(x + inner * Math.cos(angle), y + inner * Math.sin(angle));
+        ctx.lineTo(x + outer * Math.cos(angle), y + outer * Math.sin(angle));
+      }
+      ctx.stroke();
+    }
+
+    function drawNumber(x, y, number) {
+      const colors = {
+        1: '#2563eb',
+        2: '#16a34a',
+        3: '#dc2626',
+        4: '#7c3aed',
+        5: '#b45309',
+        6: '#0f172a'
+      };
+      ctx.fillStyle = colors[number] || '#334155';
+      ctx.font = `600 ${renderer.size * 0.85}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(number.toString(), x, y + 1);
+    }
+
+    function render() {
+      if (!renderer.needsRender) return;
+      ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      for (let r = 0; r < game.H; r++) {
+        for (let q = 0; q < game.W; q++) {
+          const cell = game.cell(q, r);
+          const { x, y } = axialToPixel(q, r);
+          const isHover = renderer.hoverCell && renderer.hoverCell.q === q && renderer.hoverCell.r === r;
+          const fill = cell.state === 'open' ? getCss('--tile-open') : getCss('--tile-closed');
+          const stroke = getCss('--tile-outline');
+          drawHex(x, y, renderer.size * 0.95, fill, stroke, 1);
+          if (isHover && !game.gameOver) {
+            ctx.save();
+            ctx.globalAlpha = 0.9;
+            drawHex(x, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
+            ctx.restore();
+          }
+          if (cell.state === 'open') {
+            if (cell.isMine && game.gameOver) {
+              drawMine(x, y, renderer.size);
+            } else if (cell.number > 0) {
+              drawNumber(x, y, cell.number);
+            }
+          } else if (cell.state === 'flag') {
+            drawFlag(x, y, renderer.size);
+          } else if (
+            isHover &&
+            game.mode === 'flag' &&
+            cell.state === 'closed' &&
+            !game.gameOver
+          ) {
+            drawFlag(x, y, renderer.size, 0.35);
+          }
+        }
+      }
+      renderer.needsRender = false;
+    }
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function requestRender() {
+      renderer.needsRender = true;
+    }
+
+    function loop() {
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function updateUI() {
+      minesEl.textContent = Math.max(0, game.totalMines - game.flags).toString();
+      timerEl.textContent = game.elapsed.toString();
+      if (game.gameOver) {
+        if (game.win) {
+          statusEl.textContent = 'You cleared the field!';
+          statusEl.className = 'status win';
+        } else {
+          statusEl.textContent = 'Boom! Tap restart to try again.';
+          statusEl.className = 'status lose';
+        }
+      } else {
+        statusEl.textContent = 'Stay sharp. Clear all safe tiles.';
+        statusEl.className = 'status';
+      }
+      requestRender();
+    }
+
+    function setMode(mode) {
+      game.mode = mode;
+      modeOpenBtn.classList.toggle('active', mode === 'open');
+      modeFlagBtn.classList.toggle('active', mode === 'flag');
+      requestRender();
+    }
+
+    function handleAction(cell, actionMode) {
+      if (!cell) return;
+      if (game.gameOver) return;
+      if (actionMode === 'flag') {
+        game.toggleFlag(cell);
+      } else {
+        game.openCell(cell);
+      }
+      updateUI();
+    }
+
+    function pointerToCell(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const { q, r } = pixelToAxial(x, y);
+      const cell = game.cell(q, r);
+      if (!cell) return null;
+      return cell;
+    }
+
+    canvas.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' && event.button === 2) return;
+      canvas.setPointerCapture(event.pointerId);
+      const cell = pointerToCell(event);
+      renderer.hoverCell = cell;
+      requestRender();
+    });
+
+    canvas.addEventListener('pointermove', event => {
+      const cell = pointerToCell(event);
+      if (
+        renderer.hoverCell &&
+        cell &&
+        renderer.hoverCell.q === cell.q &&
+        renderer.hoverCell.r === cell.r
+      ) {
+        return;
+      }
+      renderer.hoverCell = cell;
+      requestRender();
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      renderer.hoverCell = null;
+      requestRender();
+    });
+
+    canvas.addEventListener('pointerup', event => {
+      const cell = pointerToCell(event);
+      renderer.hoverCell = cell;
+      if (event.pointerType === 'mouse' && event.button === 2) {
+        handleAction(cell, 'flag');
+      } else {
+        handleAction(cell, game.mode);
+      }
+      requestRender();
+    });
+
+    canvas.addEventListener('contextmenu', event => {
+      event.preventDefault();
+    });
+
+    modeOpenBtn.addEventListener('click', () => setMode('open'));
+    modeFlagBtn.addEventListener('click', () => setMode('flag'));
+
+    restartBtn.addEventListener('click', () => {
+      game.stopTimer();
+      game.reset(difficultySelect.value);
+      setMode('open');
+      resizeCanvas();
+    });
+
+    difficultySelect.addEventListener('change', () => {
+      game.stopTimer();
+      game.reset(difficultySelect.value);
+      setMode('open');
+      resizeCanvas();
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    resizeCanvas();
+    updateUI();
+    loop();
+  </script>
+</body>
+</html>
