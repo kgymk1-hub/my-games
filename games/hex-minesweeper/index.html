@@ -86,6 +86,24 @@
       flex-wrap: wrap;
     }
 
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: #f0f4fa;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .segmented {
       display: inline-flex;
       background: #edf1f7;
@@ -163,6 +181,9 @@
       box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
       padding: 10px;
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     canvas {
@@ -176,7 +197,7 @@
     .footer {
       display: flex;
       justify-content: flex-end;
-      padding: 0 6px 4px;
+      padding: 0 6px 2px;
     }
 
     @media (max-width: 600px) {
@@ -191,6 +212,10 @@
       .segmented button {
         min-width: 64px;
         padding: 6px 12px;
+      }
+
+      canvas {
+        height: min(56vh, 520px);
       }
     }
   </style>
@@ -225,6 +250,10 @@
           <option value="0.26">0.26 density</option>
           <option value="0.30">0.30 density</option>
         </select>
+        <label class="toggle" for="vibration-toggle">
+          <input id="vibration-toggle" type="checkbox" />
+          Vibration
+        </label>
         <div class="segmented" role="group" aria-label="Mode toggle">
           <button id="mode-open" class="active" type="button">Open</button>
           <button id="mode-flag" type="button">Flag</button>
@@ -235,9 +264,9 @@
     <div class="status" id="status"></div>
     <div class="canvas-wrap">
       <canvas id="board" width="800" height="600"></canvas>
-    </div>
-    <div class="footer">
-      <button id="reset-best" class="secondary" type="button">Reset Best</button>
+      <div class="footer">
+        <button id="reset-best" class="secondary" type="button">Reset Best</button>
+      </div>
     </div>
   </div>
 
@@ -254,27 +283,30 @@
     const resetBestBtn = document.getElementById('reset-best');
     const sizeSelect = document.getElementById('size-select');
     const densitySelect = document.getElementById('density-select');
+    const vibrationToggle = document.getElementById('vibration-toggle');
 
-    const EVEN_DIRS = [
+    const EVEN_COL_DIRS = [
       [1, 0],
-      [0, 1],
-      [-1, 1],
-      [-1, 0],
+      [0, -1],
       [-1, -1],
-      [0, -1]
+      [-1, 0],
+      [0, 1],
+      [1, -1]
     ];
 
-    const ODD_DIRS = [
-      [1, 0],
+    const ODD_COL_DIRS = [
       [1, 1],
-      [0, 1],
+      [1, 0],
       [-1, 0],
-      [0, -1],
-      [1, -1]
+      [-1, 1],
+      [0, 1],
+      [0, -1]
     ];
 
     let winFx = null;
     const winFxDuration = 2000;
+
+    const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
 
     const resetBestState = {
       armed: false,
@@ -320,7 +352,7 @@
       }
 
       neighbors(col, row) {
-        const dirs = row % 2 === 0 ? EVEN_DIRS : ODD_DIRS;
+        const dirs = col % 2 === 0 ? EVEN_COL_DIRS : ODD_COL_DIRS;
         return dirs.map(([dc, dr]) => this.cell(col + dc, row + dr)).filter(Boolean);
       }
 
@@ -363,21 +395,25 @@
 
       toggleFlag(cell) {
         if (this.gameOver || cell.state === 'open') return;
+        let changed = false;
         if (cell.state === 'flag') {
           cell.state = 'closed';
           this.flags = Math.max(0, this.flags - 1);
+          changed = true;
         } else if (cell.state === 'closed') {
           cell.state = 'flag';
           this.flags += 1;
+          changed = true;
         }
-        if (navigator.vibrate) {
-          navigator.vibrate(10);
+        if (changed) {
+          maybeVibrate([12, 40, 12]);
         }
         updateUI();
       }
 
       openCell(cell) {
         if (this.gameOver || cell.state !== 'closed') return;
+        maybeVibrate([8, 20, 8]);
         if (!this.started) {
           this.started = true;
           this.firstCell = cell;
@@ -517,6 +553,23 @@
       localStorage.setItem(storageKey(config), value.toString());
     }
 
+    function getVibrationEnabled() {
+      const stored = localStorage.getItem(VIBRATION_STORAGE_KEY);
+      if (stored === null) return true;
+      return stored === '1';
+    }
+
+    function setVibrationEnabled(isEnabled) {
+      localStorage.setItem(VIBRATION_STORAGE_KEY, isEnabled ? '1' : '0');
+    }
+
+    function maybeVibrate(pattern) {
+      if (!vibrationToggle.checked) return;
+      if (navigator.vibrate) {
+        navigator.vibrate(pattern);
+      }
+    }
+
     function maybeUpdateBestTime(elapsed) {
       const config = { W: game.W, H: game.H, density: game.density };
       const best = getBestTime(config);
@@ -542,19 +595,20 @@
       const usableW = Math.max(0, cw - padding * 2);
       const usableH = Math.max(0, ch - padding * 2);
 
-      const widthCoeff = Math.sqrt(3) * (game.W + 0.5);
-      const heightCoeff = 1.5 * (game.H - 1) + 2;
+      const widthCoeff = 1.5 * (game.W - 1) + 2;
+      const heightCoeff = Math.sqrt(3) * (game.H + 0.5);
 
       const sizeX = usableW / widthCoeff;
       const sizeY = usableH / heightCoeff;
 
       renderer.size = Math.max(4, Math.min(sizeX, sizeY));
 
-      const hexW = Math.sqrt(3) * renderer.size;
-      const totalW = hexW * (game.W + 0.5);
-      const totalH = renderer.size * (1.5 * (game.H - 1) + 2);
+      const stepX = 1.5 * renderer.size;
+      const stepY = Math.sqrt(3) * renderer.size;
+      const totalW = stepX * (game.W - 1) + 2 * renderer.size;
+      const totalH = stepY * (game.H + 0.5);
 
-      renderer.originX = padding + (usableW - totalW) / 2 + hexW / 2;
+      renderer.originX = padding + (usableW - totalW) / 2 + renderer.size;
       renderer.originY = padding + (usableH - totalH) / 2 + renderer.size;
 
       camera.scale = 1;
@@ -563,20 +617,22 @@
     }
 
     function offsetToPixel(col, row) {
-      const hexW = Math.sqrt(3) * renderer.size;
-      const x = renderer.originX + hexW * (col + 0.5 * (row % 2));
-      const y = renderer.originY + renderer.size * 1.5 * row;
+      const stepX = 1.5 * renderer.size;
+      const stepY = Math.sqrt(3) * renderer.size;
+      const x = renderer.originX + stepX * col;
+      const y = renderer.originY + stepY * (row + 0.5 * (col % 2));
       return { x, y };
     }
 
     function pixelToCell(x, y) {
-      const hexW = Math.sqrt(3) * renderer.size;
-      const approxRow = Math.round((y - renderer.originY) / (1.5 * renderer.size));
-      const row = Math.max(0, Math.min(game.H - 1, approxRow));
-      const approxCol = Math.round((x - renderer.originX) / hexW - 0.5 * (row % 2));
+      const stepX = 1.5 * renderer.size;
+      const stepY = Math.sqrt(3) * renderer.size;
+      const approxCol = Math.round((x - renderer.originX) / stepX);
+      const col = Math.max(0, Math.min(game.W - 1, approxCol));
+      const approxRow = Math.round((y - renderer.originY) / stepY - 0.5 * (col % 2));
       let best = null;
       let bestDist = Infinity;
-      for (let r = row - 1; r <= row + 1; r++) {
+      for (let r = approxRow - 1; r <= approxRow + 1; r++) {
         for (let c = approxCol - 1; c <= approxCol + 1; c++) {
           const cell = game.cell(c, r);
           if (!cell) continue;
@@ -596,7 +652,7 @@
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i + 60);
+        const angle = Math.PI / 180 * (60 * i - 30);
         const px = x + size * Math.cos(angle);
         const py = y + size * Math.sin(angle);
         if (i === 0) ctx.moveTo(px, py);
@@ -1055,6 +1111,10 @@
 
     sizeSelect.addEventListener('change', handleConfigChange);
     densitySelect.addEventListener('change', handleConfigChange);
+    vibrationToggle.checked = getVibrationEnabled();
+    vibrationToggle.addEventListener('change', () => {
+      setVibrationEnabled(vibrationToggle.checked);
+    });
 
     window.addEventListener('resize', resizeCanvas);
 
