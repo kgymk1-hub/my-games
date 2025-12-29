@@ -708,6 +708,9 @@
     }
 
     function renderTiles(animations = []) {
+      // (2) animations を Map 化して find をやめる（軽量化＆可読性UP）
+      const animMap = new Map(animations.map((a) => [a.id, a]));
+
       const existingTiles = new Map();
       boardEl.querySelectorAll(".tile").forEach((tile) => {
         existingTiles.set(Number(tile.dataset.id), tile);
@@ -742,7 +745,7 @@
 
           tile.classList.remove("new", "merge");
 
-          const anim = animations.find((item) => item.id === id);
+          const anim = animMap.get(id);
           if (anim?.pop) tile.classList.add("new");
           if (anim?.merge) tile.classList.add("merge");
 
@@ -791,10 +794,13 @@
       return false;
     }
 
+    // (1) slide から score/hasWon の副作用を排除：points と won を返す
     function slide(row) {
       const filtered = row.filter(Boolean);
       const merged = [];
       const merges = [];
+      let points = 0;
+      let won = false;
 
       for (let i = 0; i < filtered.length; i += 1) {
         const current = filtered[i];
@@ -805,8 +811,10 @@
           const newTile = { id: current.id, value: newValue };
           merged.push(newTile);
           merges.push({ id: newTile.id, value: newValue });
-          score += newValue;
-          if (newValue === 2048) hasWon = true;
+
+          points += newValue;
+          if (newValue === 2048) won = true;
+
           i += 1;
         } else {
           merged.push(current);
@@ -814,7 +822,7 @@
       }
 
       while (merged.length < size) merged.push(null);
-      return { line: merged, merges };
+      return { line: merged, merges, points, won };
     }
 
     function move(direction) {
@@ -830,6 +838,10 @@
       const animations = [];
       let mergeCount = 0;
       let maxMergeValue = 0;
+
+      // (1) この手で増えたスコアと勝利判定をここで集計（moved確定後に反映）
+      let pointsGain = 0;
+      let wonThisMove = false;
 
       function recordAnimation(id, type) {
         animations.push({ id, [type]: true });
@@ -847,10 +859,14 @@
       if (direction === "left") {
         for (let r = 0; r < size; r += 1) {
           const current = grid[r];
-          const { line, merges } = slide(current);
+          const { line, merges, points, won } = slide(current);
           if (!rowsEqual(current, line)) {
             moved = true;
             grid[r] = line;
+
+            pointsGain += points;
+            if (won) wonThisMove = true;
+
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -863,12 +879,17 @@
       if (direction === "right") {
         for (let r = 0; r < size; r += 1) {
           const current = [...grid[r]].reverse();
-          const { line, merges } = slide(current);
+          const { line, merges, points, won } = slide(current);
           const next = line.reverse();
           const original = grid[r];
+
           if (!rowsEqual(original, next)) {
             moved = true;
             grid[r] = next;
+
+            pointsGain += points;
+            if (won) wonThisMove = true;
+
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -881,10 +902,15 @@
       if (direction === "up") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]);
-          const { line, merges } = slide(column);
+          const { line, merges, points, won } = slide(column);
+
           if (!rowsEqual(column, line)) {
             moved = true;
             for (let r = 0; r < size; r += 1) grid[r][c] = line[r];
+
+            pointsGain += points;
+            if (won) wonThisMove = true;
+
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -897,11 +923,16 @@
       if (direction === "down") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]).reverse();
-          const { line, merges } = slide(column);
+          const { line, merges, points, won } = slide(column);
           const nextColumn = line.reverse();
+
           if (!rowsEqual(grid.map((row) => row[c]), nextColumn)) {
             moved = true;
             for (let r = 0; r < size; r += 1) grid[r][c] = nextColumn[r];
+
+            pointsGain += points;
+            if (won) wonThisMove = true;
+
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -912,6 +943,10 @@
       }
 
       if (!moved) return;
+
+      // (1) moved が確定した後にだけ状態を反映
+      score += pointsGain;
+      if (wonThisMove) hasWon = true;
 
       pushHistory(previousState);
       inputLocked = true;
