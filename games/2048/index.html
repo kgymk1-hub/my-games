@@ -485,7 +485,7 @@
       noiseBuffer = buffer;
     }
 
-    // Slide "シュッ"
+    // Slide "シュッ"（差し替え版）
     function playSlideSound() {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
@@ -495,57 +495,68 @@
       if (!noiseBuffer) return;
 
       const now = audioContext.currentTime;
-      const duration = 0.1;
+      const duration = 0.11;
 
       const source = audioContext.createBufferSource();
       source.buffer = noiseBuffer;
 
-      const band = audioContext.createBiquadFilter();
-      band.type = "bandpass";
-      band.Q.value = 0.75;
-
+      // Airy noise chain: HP -> BP(sweep) -> gentle shelf
       const highpass = audioContext.createBiquadFilter();
       highpass.type = "highpass";
-      highpass.frequency.value = 520;
+      highpass.frequency.setValueAtTime(650, now);
+
+      const band = audioContext.createBiquadFilter();
+      band.type = "bandpass";
+      band.Q.setValueAtTime(1.15, now);
+
+      // subtle brightness
+      const shelf = audioContext.createBiquadFilter();
+      shelf.type = "highshelf";
+      shelf.frequency.setValueAtTime(3000, now);
+      shelf.gain.setValueAtTime(3.5, now);
 
       const gainNode = audioContext.createGain();
-      gainNode.gain.value = 0.0001;
 
-      source.connect(band);
-      band.connect(highpass);
-      highpass.connect(gainNode);
+      // clickless fade in/out
+      gainNode.gain.setValueAtTime(0.0, now);
+      gainNode.gain.linearRampToValueAtTime(0.10, now + 0.010);
+      gainNode.gain.linearRampToValueAtTime(0.0, now + duration);
+
+      source.connect(highpass);
+      highpass.connect(band);
+      band.connect(shelf);
+      shelf.connect(gainNode);
       gainNode.connect(masterGain);
 
-      // small randomness to avoid “same sound” fatigue
-      const startFreq = 850 + (Math.random() * 120);
-      const endFreq = 2100 + (Math.random() * 220);
-
+      // “シュッ” sweep
+      const startFreq = 700 + Math.random() * 120;
+      const endFreq = 3600 + Math.random() * 600;
       band.frequency.setValueAtTime(startFreq, now);
       band.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
 
-      const peak = 0.11;
-      gainNode.gain.exponentialRampToValueAtTime(peak, now + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
       // thin whistle layer
-      const whisper = audioContext.createOscillator();
-      const whisperGain = audioContext.createGain();
-      whisper.type = "sine";
-      whisper.frequency.setValueAtTime(1250 + Math.random() * 120, now);
-      whisper.frequency.exponentialRampToValueAtTime(1900 + Math.random() * 160, now + duration);
-      whisperGain.gain.value = 0.0001;
-      whisper.connect(whisperGain);
-      whisperGain.connect(masterGain);
-      whisperGain.gain.exponentialRampToValueAtTime(0.022, now + 0.008);
-      whisperGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      const whistle = audioContext.createOscillator();
+      const whistleGain = audioContext.createGain();
+      whistle.type = "triangle";
+      whistleGain.gain.setValueAtTime(0.0, now);
+      whistleGain.gain.linearRampToValueAtTime(0.015, now + 0.012);
+      whistleGain.gain.linearRampToValueAtTime(0.0, now + duration);
+
+      const wStart = 1400 + Math.random() * 150;
+      const wEnd = 2200 + Math.random() * 220;
+      whistle.frequency.setValueAtTime(wStart, now);
+      whistle.frequency.exponentialRampToValueAtTime(wEnd, now + duration);
+
+      whistle.connect(whistleGain);
+      whistleGain.connect(masterGain);
 
       source.start(now, Math.random());
       source.stop(now + duration + 0.02);
-      whisper.start(now);
-      whisper.stop(now + duration + 0.04);
+      whistle.start(now);
+      whistle.stop(now + duration + 0.03);
     }
 
-    // Merge "シャキーン"
+    // Merge "シャキーン"（差し替え版）
     function playMergeSound(mergeValue = 2) {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
@@ -555,126 +566,136 @@
       const level = Math.max(1, Math.log2(mergeValue));
       const normalized = Math.min(1, (level - 1) / 10);
 
-      const duration = 0.14 + normalized * 0.22;
-      const base = 360 + level * 26;
+      // longer-ish for “シャキーン”
+      const duration = 0.18 + normalized * 0.26;
 
-      const tier = level <= 4 ? "small" : level <= 8 ? "medium" : "large";
+      // raise base to avoid “ポン”
+      const base = 520 + level * 34;
 
-      // mix gain: protect against clipping as it gets flashy
       const mixGain = audioContext.createGain();
-      mixGain.gain.value = tier === "large" ? 0.72 : tier === "medium" ? 0.82 : 0.92;
-      mixGain.connect(masterGain);
+      mixGain.gain.setValueAtTime(0.85, now);
+
+      // HP cut to remove low “thump”
+      const hp = audioContext.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.setValueAtTime(380, now);
+
+      mixGain.connect(hp);
+      hp.connect(masterGain);
 
       const addTone = ({
-        frequency,
+        f0,
+        f1,
         type,
+        peak,
+        a = 0.012,
+        d = duration,
         detune = 0,
-        peak = 0.1,
-        attack = 0.01,
-        decay = duration,
-        sweepTo = null,
-        startOffset = 0
+        t0 = 0
       }) => {
         const osc = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        gainNode.gain.value = 0.0001;
+        const g = audioContext.createGain();
+
+        g.gain.setValueAtTime(0.0, now + t0);
+        g.gain.linearRampToValueAtTime(peak, now + t0 + a);
+        g.gain.linearRampToValueAtTime(0.0, now + t0 + d);
 
         osc.type = type;
-        osc.frequency.setValueAtTime(frequency, now + startOffset);
-        if (sweepTo) {
-          osc.frequency.exponentialRampToValueAtTime(
-            sweepTo,
-            now + startOffset + decay * 0.8
-          );
-        }
-        osc.detune.value = detune;
+        osc.detune.setValueAtTime(detune, now + t0);
+        osc.frequency.setValueAtTime(f0, now + t0);
+        osc.frequency.exponentialRampToValueAtTime(f1, now + t0 + d * 0.85);
 
-        osc.connect(gainNode);
-        gainNode.connect(mixGain);
+        osc.connect(g);
+        g.connect(mixGain);
 
-        gainNode.gain.exponentialRampToValueAtTime(peak, now + startOffset + attack);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + decay);
-
-        osc.start(now + startOffset);
-        osc.stop(now + startOffset + decay + 0.08);
+        osc.start(now + t0);
+        osc.stop(now + t0 + d + 0.06);
       };
 
-      // Main hit
+      // main shimmer hit
       addTone({
-        frequency: base * 0.95,
-        sweepTo: base * (1.55 + normalized * 0.3),
+        f0: base * 1.15,
+        f1: base * (2.35 + normalized * 0.25),
         type: "triangle",
-        peak: 0.11 - normalized * 0.04,
-        attack: 0.012,
-        decay: duration
+        peak: 0.11 - normalized * 0.03,
+        a: 0.014,
+        d: duration
       });
 
-      // Harmony
-      if (tier !== "small") {
-        addTone({
-          frequency: base * 1.25,
-          sweepTo: base * 2.05,
-          type: "sine",
-          peak: 0.05 - normalized * 0.016,
-          attack: 0.01,
-          decay: duration * 0.9,
-          detune: 8 + normalized * 10,
-          startOffset: 0.01
-        });
+      // harmony thickness
+      addTone({
+        f0: base * 1.75,
+        f1: base * 3.1,
+        type: "sine",
+        peak: 0.045 - normalized * 0.012,
+        a: 0.012,
+        d: duration * 0.92,
+        detune: 10 + normalized * 12,
+        t0: 0.01
+      });
+
+      // sparkle high layer
+      addTone({
+        f0: base * 3.2,
+        f1: base * 5.4,
+        type: "sawtooth",
+        peak: 0.022,
+        a: 0.010,
+        d: duration * 0.70,
+        detune: 18 + normalized * 16,
+        t0: 0.02
+      });
+
+      // short metallic noise “シャキ”
+      ensureNoiseBuffer();
+      if (noiseBuffer) {
+        const n = audioContext.createBufferSource();
+        n.buffer = noiseBuffer;
+
+        const bp = audioContext.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.Q.setValueAtTime(2.2, now);
+        bp.frequency.setValueAtTime(2100, now);
+        bp.frequency.exponentialRampToValueAtTime(5200, now + 0.06);
+
+        const ng = audioContext.createGain();
+        ng.gain.setValueAtTime(0.0, now);
+        ng.gain.linearRampToValueAtTime(0.05, now + 0.008);
+        ng.gain.linearRampToValueAtTime(0.0, now + 0.07);
+
+        n.connect(bp);
+        bp.connect(ng);
+        ng.connect(masterGain);
+
+        n.start(now, Math.random());
+        n.stop(now + 0.08);
       }
 
-      // Sparkle layers
-      if (tier === "large") {
-        addTone({
-          frequency: base * 1.6,
-          sweepTo: base * 2.7,
-          type: "sawtooth",
-          peak: 0.038 - normalized * 0.014,
-          attack: 0.008,
-          decay: duration * 0.95,
-          detune: 16 + normalized * 18,
-          startOffset: 0.012
-        });
-
-        addTone({
-          frequency: base * 3.2,
-          sweepTo: base * 4.4,
-          type: "square",
-          peak: 0.018,
-          attack: 0.005,
-          decay: duration * 0.6,
-          startOffset: 0.02
-        });
-      }
-
-      // Reused delay send for medium/large
-      if (tier !== "small" && mergeDelay && mergeDelayGain) {
-        mergeDelay.delayTime.value = 0.06 + normalized * 0.02;
-        mergeDelayGain.gain.value = 0.13 - normalized * 0.05;
-        mergeFeedback.gain.value = 0.14;
+      // stronger “shine tail” via shared delay
+      if (mergeDelay && mergeDelayGain && mergeFeedback) {
+        mergeDelay.delayTime.setValueAtTime(0.075 + normalized * 0.015, now);
+        mergeDelayGain.gain.setValueAtTime(0.18 - normalized * 0.06, now);
+        mergeFeedback.gain.setValueAtTime(0.16, now);
 
         const send = audioContext.createGain();
-        send.gain.value = 0.0001;
-        mixGain.connect(send);
+        send.gain.setValueAtTime(0.0, now);
+        send.gain.linearRampToValueAtTime(0.16 - normalized * 0.06, now + 0.02);
+        send.gain.linearRampToValueAtTime(0.0, now + duration + 0.12);
+
+        hp.connect(send);
         send.connect(mergeDelay);
 
-        const sendPeak = 0.14 - normalized * 0.05;
-        send.gain.exponentialRampToValueAtTime(sendPeak, now + 0.02);
-        send.gain.exponentialRampToValueAtTime(0.0001, now + duration + 0.08);
-
-        // cleanup
         setTimeout(() => {
           try {
-            mixGain.disconnect(send);
+            hp.disconnect(send);
             send.disconnect(mergeDelay);
           } catch (e) {}
-        }, Math.ceil((duration + 0.25) * 1000));
+        }, Math.ceil((duration + 0.35) * 1000));
       }
 
-      // cleanup main mix node
       setTimeout(() => {
-        try { mixGain.disconnect(); } catch (e) {}
-      }, Math.ceil((duration + 0.25) * 1000));
+        try { hp.disconnect(); } catch (e) {}
+      }, Math.ceil((duration + 0.35) * 1000));
     }
 
     function randomEmptyCell() {
@@ -708,9 +729,6 @@
     }
 
     function renderTiles(animations = []) {
-      // (2) animations を Map 化して find をやめる（軽量化＆可読性UP）
-      const animMap = new Map(animations.map((a) => [a.id, a]));
-
       const existingTiles = new Map();
       boardEl.querySelectorAll(".tile").forEach((tile) => {
         existingTiles.set(Number(tile.dataset.id), tile);
@@ -745,7 +763,7 @@
 
           tile.classList.remove("new", "merge");
 
-          const anim = animMap.get(id);
+          const anim = animations.find((item) => item.id === id);
           if (anim?.pop) tile.classList.add("new");
           if (anim?.merge) tile.classList.add("merge");
 
@@ -794,13 +812,10 @@
       return false;
     }
 
-    // (1) slide から score/hasWon の副作用を排除：points と won を返す
     function slide(row) {
       const filtered = row.filter(Boolean);
       const merged = [];
       const merges = [];
-      let points = 0;
-      let won = false;
 
       for (let i = 0; i < filtered.length; i += 1) {
         const current = filtered[i];
@@ -811,10 +826,8 @@
           const newTile = { id: current.id, value: newValue };
           merged.push(newTile);
           merges.push({ id: newTile.id, value: newValue });
-
-          points += newValue;
-          if (newValue === 2048) won = true;
-
+          score += newValue;
+          if (newValue === 2048) hasWon = true;
           i += 1;
         } else {
           merged.push(current);
@@ -822,7 +835,7 @@
       }
 
       while (merged.length < size) merged.push(null);
-      return { line: merged, merges, points, won };
+      return { line: merged, merges };
     }
 
     function move(direction) {
@@ -838,10 +851,6 @@
       const animations = [];
       let mergeCount = 0;
       let maxMergeValue = 0;
-
-      // (1) この手で増えたスコアと勝利判定をここで集計（moved確定後に反映）
-      let pointsGain = 0;
-      let wonThisMove = false;
 
       function recordAnimation(id, type) {
         animations.push({ id, [type]: true });
@@ -859,14 +868,10 @@
       if (direction === "left") {
         for (let r = 0; r < size; r += 1) {
           const current = grid[r];
-          const { line, merges, points, won } = slide(current);
+          const { line, merges } = slide(current);
           if (!rowsEqual(current, line)) {
             moved = true;
             grid[r] = line;
-
-            pointsGain += points;
-            if (won) wonThisMove = true;
-
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -879,17 +884,12 @@
       if (direction === "right") {
         for (let r = 0; r < size; r += 1) {
           const current = [...grid[r]].reverse();
-          const { line, merges, points, won } = slide(current);
+          const { line, merges } = slide(current);
           const next = line.reverse();
           const original = grid[r];
-
           if (!rowsEqual(original, next)) {
             moved = true;
             grid[r] = next;
-
-            pointsGain += points;
-            if (won) wonThisMove = true;
-
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -902,15 +902,10 @@
       if (direction === "up") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]);
-          const { line, merges, points, won } = slide(column);
-
+          const { line, merges } = slide(column);
           if (!rowsEqual(column, line)) {
             moved = true;
             for (let r = 0; r < size; r += 1) grid[r][c] = line[r];
-
-            pointsGain += points;
-            if (won) wonThisMove = true;
-
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -923,16 +918,11 @@
       if (direction === "down") {
         for (let c = 0; c < size; c += 1) {
           const column = grid.map((row) => row[c]).reverse();
-          const { line, merges, points, won } = slide(column);
+          const { line, merges } = slide(column);
           const nextColumn = line.reverse();
-
           if (!rowsEqual(grid.map((row) => row[c]), nextColumn)) {
             moved = true;
             for (let r = 0; r < size; r += 1) grid[r][c] = nextColumn[r];
-
-            pointsGain += points;
-            if (won) wonThisMove = true;
-
             merges.forEach((merge) => {
               recordAnimation(merge.id, "merge");
               maxMergeValue = Math.max(maxMergeValue, merge.value);
@@ -943,10 +933,6 @@
       }
 
       if (!moved) return;
-
-      // (1) moved が確定した後にだけ状態を反映
-      score += pointsGain;
-      if (wonThisMove) hasWon = true;
 
       pushHistory(previousState);
       inputLocked = true;
