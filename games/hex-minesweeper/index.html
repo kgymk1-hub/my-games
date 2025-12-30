@@ -104,6 +104,29 @@
       cursor: pointer;
     }
 
+    .volume {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: #f0f4fa;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .volume input[type="range"] {
+      width: 120px;
+      accent-color: var(--accent);
+    }
+
+    .volume small {
+      min-width: 44px;
+      text-align: right;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
     .segmented {
       display: inline-flex;
       background: #edf1f7;
@@ -217,6 +240,10 @@
       canvas {
         height: min(56vh, 520px);
       }
+
+      .volume input[type="range"] {
+        width: 96px;
+      }
     }
   </style>
 </head>
@@ -250,14 +277,23 @@
           <option value="0.26">0.26 density</option>
           <option value="0.30">0.30 density</option>
         </select>
+
         <label class="toggle" for="vibration-toggle">
           <input id="vibration-toggle" type="checkbox" />
           Vibration
         </label>
+
         <label class="toggle" for="sound-toggle">
           <input id="sound-toggle" type="checkbox" />
           Sound
         </label>
+
+        <div class="volume" title="Sound volume">
+          <span>Vol</span>
+          <input id="volume-slider" type="range" min="0" max="100" step="1" />
+          <small id="volume-label">100%</small>
+        </div>
+
         <div class="segmented" role="group" aria-label="Mode toggle">
           <button id="mode-open" class="active" type="button">Open</button>
           <button id="mode-flag" type="button">Flag</button>
@@ -265,7 +301,9 @@
         <button id="restart" class="primary" type="button">Restart</button>
       </div>
     </header>
+
     <div class="status" id="status"></div>
+
     <div class="canvas-wrap">
       <canvas id="board" width="800" height="600"></canvas>
       <div class="footer">
@@ -277,18 +315,26 @@
   <script>
     const canvas = document.getElementById('board');
     const ctx = canvas.getContext('2d');
+
     const timerEl = document.getElementById('timer');
     const minesEl = document.getElementById('mines');
     const bestEl = document.getElementById('best');
     const statusEl = document.getElementById('status');
+
     const modeOpenBtn = document.getElementById('mode-open');
     const modeFlagBtn = document.getElementById('mode-flag');
+
     const restartBtn = document.getElementById('restart');
     const resetBestBtn = document.getElementById('reset-best');
+
     const sizeSelect = document.getElementById('size-select');
     const densitySelect = document.getElementById('density-select');
+
     const vibrationToggle = document.getElementById('vibration-toggle');
     const soundToggle = document.getElementById('sound-toggle');
+
+    const volumeSlider = document.getElementById('volume-slider');
+    const volumeLabel = document.getElementById('volume-label');
 
     const EVEN_COL_DIRS = [
       [1, 0],
@@ -311,8 +357,13 @@
     let winFx = null;
     const winFxDuration = 2000;
 
+    let boomFx = null;
+    const boomFxDuration = 900;
+
     const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
     const SOUND_STORAGE_KEY = 'hexMines:sound';
+    const VOLUME_STORAGE_KEY = 'hexMines:volume';
+
     let audioContext = null;
 
     const resetBestState = {
@@ -350,6 +401,7 @@
         this.timerId = null;
         this.highlight = null;
         winFx = null;
+        boomFx = null;
         if (game) updateUI();
       }
 
@@ -369,6 +421,7 @@
         this.neighbors(startCell.col, startCell.row).forEach(cell => {
           forbidden.add(`${cell.col},${cell.row}`);
         });
+
         const candidates = [];
         for (let row = 0; row < this.H; row++) {
           for (let col = 0; col < this.W; col++) {
@@ -378,6 +431,7 @@
             }
           }
         }
+
         const minesToPlace = Math.min(this.totalMines, candidates.length);
         shuffle(candidates);
         for (let i = 0; i < minesToPlace; i++) {
@@ -391,17 +445,15 @@
         for (let row = 0; row < this.H; row++) {
           for (let col = 0; col < this.W; col++) {
             const cell = this.board[row][col];
-            if (cell.isMine) {
-              cell.number = 0;
-            } else {
-              cell.number = this.neighbors(col, row).filter(n => n.isMine).length;
-            }
+            if (cell.isMine) cell.number = 0;
+            else cell.number = this.neighbors(col, row).filter(n => n.isMine).length;
           }
         }
       }
 
       toggleFlag(cell) {
         if (this.gameOver || cell.state === 'open') return;
+
         let changed = false;
         if (cell.state === 'flag') {
           cell.state = 'closed';
@@ -412,8 +464,9 @@
           this.flags += 1;
           changed = true;
         }
+
         if (changed) {
-          vibrateFlag();
+          vibrateFlag();   // 強さは同等、2回感を強調
           playFlag();
         }
         updateUI();
@@ -421,24 +474,33 @@
 
       openCell(cell) {
         if (this.gameOver || cell.state !== 'closed') return;
+
         if (!this.started) {
           this.started = true;
           this.firstCell = cell;
           this.placeMinesSafe(cell);
           this.startTimer();
         }
+
         if (cell.isMine) {
           cell.state = 'open';
           this.gameOver = true;
           this.revealMines();
           this.stopTimer();
+
+          // 派手演出
+          startBoomFx(cell.col, cell.row);
+
           vibrateBoom();
           playBoom();
+
           updateUI();
           return;
         }
+
         vibrateOpen();
         playOpen();
+
         this.floodOpen(cell);
         this.checkWin();
       }
@@ -448,12 +510,11 @@
         while (queue.length) {
           const cell = queue.shift();
           if (cell.state !== 'closed') continue;
+
           cell.state = 'open';
           if (cell.number === 0) {
             this.neighbors(cell.col, cell.row).forEach(n => {
-              if (n.state === 'closed') {
-                queue.push(n);
-              }
+              if (n.state === 'closed') queue.push(n);
             });
           }
         }
@@ -463,9 +524,7 @@
         for (let row = 0; row < this.H; row++) {
           for (let col = 0; col < this.W; col++) {
             const cell = this.board[row][col];
-            if (cell.isMine) {
-              cell.state = 'open';
-            }
+            if (cell.isMine) cell.state = 'open';
           }
         }
       }
@@ -473,6 +532,7 @@
       checkWin() {
         let openCount = 0;
         let safeCount = 0;
+
         for (let row = 0; row < this.H; row++) {
           for (let col = 0; col < this.W; col++) {
             const cell = this.board[row][col];
@@ -480,6 +540,7 @@
             if (cell.state === 'open' && !cell.isMine) openCount++;
           }
         }
+
         if (openCount === safeCount && !this.gameOver) {
           this.gameOver = true;
           this.win = true;
@@ -566,6 +627,12 @@
       localStorage.setItem(storageKey(config), value.toString());
     }
 
+    function maybeUpdateBestTime(elapsed) {
+      const config = { W: game.W, H: game.H, density: game.density };
+      const best = getBestTime(config);
+      if (best === null || elapsed < best) setBestTime(config, elapsed);
+    }
+
     function getVibrationEnabled() {
       const stored = localStorage.getItem(VIBRATION_STORAGE_KEY);
       if (stored === null) return true;
@@ -586,29 +653,56 @@
       localStorage.setItem(SOUND_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
-    function maybeVibrate(pattern) {
-      if (!vibrationToggle.checked) return;
-      if (navigator.vibrate) {
-        navigator.vibrate(pattern);
-      }
+    function clamp01(v) {
+      return Math.max(0, Math.min(1, v));
     }
 
+    function getVolume() {
+      const stored = localStorage.getItem(VOLUME_STORAGE_KEY);
+      if (stored === null) return 1;
+      const v = Number.parseFloat(stored);
+      return Number.isFinite(v) ? clamp01(v) : 1;
+    }
+
+    function setVolume(v01) {
+      localStorage.setItem(VOLUME_STORAGE_KEY, clamp01(v01).toString());
+    }
+
+    function applyVolumeUI(v01) {
+      const pct = Math.round(clamp01(v01) * 100);
+      volumeSlider.value = String(pct);
+      volumeLabel.textContent = `${pct}%`;
+    }
+
+    function masterVolume() {
+      return getVolume();
+    }
+
+    function maybeVibrate(pattern) {
+      if (!vibrationToggle.checked) return;
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    // Open: 単発
     function vibrateOpen() {
       maybeVibrate(18);
     }
 
+    // Flag: 2回を“間隔短め”で強調（強さは同等）
     function vibrateFlag() {
-      maybeVibrate([18, 60, 18]);
+      maybeVibrate([18, 35, 18]);
     }
 
+    // Boom: 最大限派手（切られにくいよう段階的）
     function vibrateBoom() {
-      maybeVibrate([40, 60, 40, 60, 120]);
+      maybeVibrate([30, 40, 30, 40, 60, 60, 120, 60, 180]);
     }
 
     function vibrateClear() {
       maybeVibrate([20, 40, 20, 40, 60]);
     }
 
+    // ---------- Sound engine ----------
     function getAudioContext() {
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -619,9 +713,7 @@
     function ensureAudioUnlocked() {
       if (!soundToggle.checked) return;
       const ctx = getAudioContext();
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
+      if (ctx.state === 'suspended') ctx.resume();
     }
 
     function playTone({
@@ -638,19 +730,27 @@
       const ctx = getAudioContext();
       const now = ctx.currentTime;
       const start = startTime ?? now;
+
+      const vol = masterVolume();
+      const g = Math.max(0.0001, gain * vol);
+
       const osc = ctx.createOscillator();
       const amp = ctx.createGain();
+
       osc.type = type;
       osc.frequency.setValueAtTime(freq, start);
       if (freqEnd) {
         osc.frequency.exponentialRampToValueAtTime(freqEnd, start + durationMs / 1000);
       }
+
       amp.gain.setValueAtTime(0.0001, start);
       const attack = Math.max(0.001, attackMs / 1000);
-      amp.gain.exponentialRampToValueAtTime(gain, start + attack);
+      amp.gain.exponentialRampToValueAtTime(g, start + attack);
+
       const endTime = start + durationMs / 1000;
       const decay = Math.max(0.001, decayMs / 1000);
       amp.gain.exponentialRampToValueAtTime(0.0001, Math.max(start + attack, endTime - decay));
+
       osc.connect(amp);
       amp.connect(ctx.destination);
       osc.start(start);
@@ -662,19 +762,30 @@
       const ctx = getAudioContext();
       const now = ctx.currentTime;
       const start = startTime ?? now;
+
+      const vol = masterVolume();
+      const g = Math.max(0.0001, gain * vol);
+
       const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * (durationMs / 1000)));
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
+
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        // 爆発っぽく：最初強く、後半減衰
+        const env = 1 - i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * env;
       }
+
       const source = ctx.createBufferSource();
       const amp = ctx.createGain();
       source.buffer = buffer;
-      amp.gain.setValueAtTime(gain, start);
+
+      amp.gain.setValueAtTime(g, start);
       amp.gain.exponentialRampToValueAtTime(0.0001, start + durationMs / 1000);
+
       source.connect(amp);
       amp.connect(ctx.destination);
+
       source.start(start);
       source.stop(start + durationMs / 1000 + 0.02);
     }
@@ -682,7 +793,7 @@
     function playOpen() {
       if (!soundToggle.checked) return;
       ensureAudioUnlocked();
-      playTone({ freq: 1040, durationMs: 40, type: 'triangle', gain: 0.16, attackMs: 4, decayMs: 30 });
+      playTone({ freq: 1040, durationMs: 42, type: 'triangle', gain: 0.16, attackMs: 4, decayMs: 30 });
     }
 
     function playFlag() {
@@ -690,26 +801,43 @@
       ensureAudioUnlocked();
       const ctx = getAudioContext();
       const base = ctx.currentTime + 0.01;
-      playTone({ freq: 920, durationMs: 38, type: 'triangle', gain: 0.15, attackMs: 4, decayMs: 28, startTime: base });
-      playTone({ freq: 1200, durationMs: 38, type: 'triangle', gain: 0.15, attackMs: 4, decayMs: 28, startTime: base + 0.08 });
+      playTone({ freq: 920, durationMs: 40, type: 'triangle', gain: 0.16, attackMs: 4, decayMs: 28, startTime: base });
+      playTone({ freq: 1200, durationMs: 40, type: 'triangle', gain: 0.16, attackMs: 4, decayMs: 28, startTime: base + 0.075 });
     }
 
+    // 最大限派手：低音ピッチダウン + ノイズ + 追撃の低音
     function playBoom() {
       if (!soundToggle.checked) return;
       ensureAudioUnlocked();
       const ctx = getAudioContext();
       const base = ctx.currentTime + 0.01;
+
+      // 主低音（ドロップ）
       playTone({
-        freq: 160,
-        freqEnd: 80,
-        durationMs: 280,
+        freq: 170,
+        freqEnd: 70,
+        durationMs: 360,
         type: 'sine',
-        gain: 0.28,
-        attackMs: 6,
-        decayMs: 220,
+        gain: 0.34,
+        attackMs: 4,
+        decayMs: 300,
         startTime: base
       });
-      playNoise({ durationMs: 120, gain: 0.12, startTime: base + 0.02 });
+
+      // ノイズ（破裂感）
+      playNoise({ durationMs: 160, gain: 0.18, startTime: base + 0.01 });
+
+      // 追撃の低音（ドン）
+      playTone({
+        freq: 110,
+        freqEnd: 90,
+        durationMs: 220,
+        type: 'triangle',
+        gain: 0.22,
+        attackMs: 2,
+        decayMs: 190,
+        startTime: base + 0.08
+      });
     }
 
     function playClear() {
@@ -717,19 +845,12 @@
       ensureAudioUnlocked();
       const ctx = getAudioContext();
       const base = ctx.currentTime + 0.02;
-      playTone({ freq: 880, durationMs: 80, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 60, startTime: base });
-      playTone({ freq: 1100, durationMs: 80, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 60, startTime: base + 0.09 });
-      playTone({ freq: 1320, durationMs: 110, type: 'sine', gain: 0.2, attackMs: 6, decayMs: 90, startTime: base + 0.18 });
+      playTone({ freq: 880, durationMs: 85, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 65, startTime: base });
+      playTone({ freq: 1100, durationMs: 85, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 65, startTime: base + 0.09 });
+      playTone({ freq: 1320, durationMs: 125, type: 'sine', gain: 0.20, attackMs: 6, decayMs: 95, startTime: base + 0.18 });
     }
 
-    function maybeUpdateBestTime(elapsed) {
-      const config = { W: game.W, H: game.H, density: game.density };
-      const best = getBestTime(config);
-      if (best === null || elapsed < best) {
-        setBestTime(config, elapsed);
-      }
-    }
-
+    // ---------- Rendering / Layout ----------
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.floor(rect.width * devicePixelRatio);
@@ -784,6 +905,7 @@
       const approxRow = Math.round((y - renderer.originY) / stepY - 0.5 * (col % 2));
       let best = null;
       let bestDist = Infinity;
+
       for (let r = approxRow - 1; r <= approxRow + 1; r++) {
         for (let c = approxCol - 1; c <= approxCol + 1; c++) {
           const cell = game.cell(c, r);
@@ -804,6 +926,7 @@
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
+        // 90°回転（視覚だけ）
         const angle = Math.PI / 180 * (60 * i + 60);
         const px = x + size * Math.cos(angle);
         const py = y + size * Math.sin(angle);
@@ -827,6 +950,7 @@
       ctx.moveTo(x - size * 0.1, y + size * 0.35);
       ctx.lineTo(x - size * 0.1, y - size * 0.45);
       ctx.stroke();
+
       ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--flag');
       ctx.beginPath();
       ctx.moveTo(x - size * 0.1, y - size * 0.45);
@@ -842,6 +966,7 @@
       ctx.beginPath();
       ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = size * 0.08;
       ctx.beginPath();
@@ -871,6 +996,15 @@
       ctx.fillText(number.toString(), x, y + 1);
     }
 
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function requestRender() {
+      renderer.needsRender = true;
+    }
+
+    // ---------- Win FX ----------
     function startWinFx() {
       const centerX = canvas.clientWidth / 2;
       const centerY = canvas.clientHeight / 2;
@@ -901,6 +1035,7 @@
         winFx = null;
         return;
       }
+
       const progress = elapsed / duration;
       const alpha = Math.max(0, 1 - progress);
       const centerX = canvas.clientWidth / 2;
@@ -943,26 +1078,125 @@
       ctx.restore();
     }
 
+    // ---------- Boom FX ----------
+    function startBoomFx(col, row) {
+      const center = offsetToPixel(col, row);
+      const colors = ['#ef4444', '#f97316', '#f59e0b', '#fb7185', '#dc2626'];
+
+      const particles = Array.from({ length: 54 }, () => {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 120 + Math.random() * 260;
+        return {
+          x: center.x,
+          y: center.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 30,
+          size: 3 + Math.random() * 5,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * Math.PI
+        };
+      });
+
+      boomFx = {
+        start: performance.now(),
+        cx: center.x,
+        cy: center.y,
+        particles
+      };
+
+      requestRender();
+    }
+
+    function boomShakeOffset() {
+      if (!boomFx) return { x: 0, y: 0 };
+      const t = (performance.now() - boomFx.start) / boomFxDuration;
+      if (t < 0 || t > 1) return { x: 0, y: 0 };
+      const strength = (1 - t) * 10; // px
+      return {
+        x: (Math.random() * 2 - 1) * strength,
+        y: (Math.random() * 2 - 1) * strength
+      };
+    }
+
+    function renderBoomFx() {
+      if (!boomFx) return;
+
+      const now = performance.now();
+      const elapsed = (now - boomFx.start) / 1000;
+      const duration = boomFxDuration / 1000;
+
+      if (elapsed > duration) {
+        boomFx = null;
+        return;
+      }
+
+      const progress = elapsed / duration;
+      const alpha = Math.max(0, 1 - progress);
+
+      // 赤フラッシュ（全体）
+      ctx.save();
+      ctx.globalAlpha = 0.18 * alpha;
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      ctx.restore();
+
+      // 爆心リング
+      const ring = 18 + 220 * progress;
+      ctx.save();
+      ctx.globalAlpha = 0.65 * alpha;
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(boomFx.cx, boomFx.cy, ring, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 破片パーティクル
+      const gravity = 220;
+      boomFx.particles.forEach(p => {
+        const px = p.x + p.vx * elapsed;
+        const py = p.y + p.vy * elapsed + 0.5 * gravity * elapsed * elapsed;
+
+        ctx.save();
+        ctx.globalAlpha = 0.9 * alpha;
+        ctx.translate(px, py);
+        ctx.rotate(p.rotation + elapsed * 6);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 1.6);
+        ctx.restore();
+      });
+    }
+
+    // ---------- Main render ----------
     function render() {
       if (!renderer.needsRender) return;
+
       ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+      const shake = boomShakeOffset();
+
       ctx.save();
-      ctx.translate(camera.tx, camera.ty);
+      ctx.translate(camera.tx + shake.x, camera.ty + shake.y);
       ctx.scale(camera.scale, camera.scale);
+
       for (let row = 0; row < game.H; row++) {
         for (let col = 0; col < game.W; col++) {
           const cell = game.cell(col, row);
           const { x, y } = offsetToPixel(col, row);
           const isHover = renderer.hoverCell && renderer.hoverCell.col === col && renderer.hoverCell.row === row;
+
           const fill = cell.state === 'open' ? getCss('--tile-open') : getCss('--tile-closed');
           const stroke = getCss('--tile-outline');
+
           drawHex(x, y, renderer.size * 0.95, fill, stroke, 1);
+
           if (isHover && !game.gameOver) {
             ctx.save();
             ctx.globalAlpha = 0.9;
             drawHex(x, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
             ctx.restore();
           }
+
           if (cell.state === 'open') {
             if (cell.isMine && game.gameOver) {
               drawMine(x, y, renderer.size);
@@ -981,23 +1215,19 @@
           }
         }
       }
+
       ctx.restore();
+
+      // overlay fx (screen space)
+      renderBoomFx();
       renderWinFx();
+
       renderer.needsRender = false;
     }
 
-    function getCss(name) {
-      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    }
-
-    function requestRender() {
-      renderer.needsRender = true;
-    }
-
     function loop() {
-      if (winFx && performance.now() - winFx.start < winFxDuration) {
-        requestRender();
-      }
+      if (winFx && performance.now() - winFx.start < winFxDuration) requestRender();
+      if (boomFx && performance.now() - boomFx.start < boomFxDuration) requestRender();
       render();
       requestAnimationFrame(loop);
     }
@@ -1005,9 +1235,11 @@
     function updateUI() {
       const config = { W: game.W, H: game.H, density: game.density };
       const best = getBestTime(config);
+
       minesEl.textContent = Math.max(0, game.totalMines - game.flags).toString();
       timerEl.textContent = game.elapsed.toString();
       bestEl.textContent = best === null ? '--' : best.toString();
+
       if (game.gameOver) {
         if (game.win) {
           statusEl.textContent = 'You cleared the field!';
@@ -1020,6 +1252,7 @@
         statusEl.textContent = 'Stay sharp. Clear all safe tiles.';
         statusEl.className = 'status';
       }
+
       requestRender();
     }
 
@@ -1033,11 +1266,8 @@
     function handleAction(cell, actionMode) {
       if (!cell) return;
       if (game.gameOver) return;
-      if (actionMode === 'flag') {
-        game.toggleFlag(cell);
-      } else {
-        game.openCell(cell);
-      }
+      if (actionMode === 'flag') game.toggleFlag(cell);
+      else game.openCell(cell);
       updateUI();
     }
 
@@ -1067,6 +1297,7 @@
       const entries = Array.from(pointerState.pointers.entries()).slice(0, 2);
       const [aId, a] = entries[0];
       const [bId, b] = entries[1];
+
       pointerState.gestureActive = true;
       pointerState.gesturePointerIds = new Set([aId, bId]);
       pointerState.startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
@@ -1082,18 +1313,22 @@
 
     function updateGesture() {
       if (!pointerState.gestureActive || pointerState.pointers.size < 2) return;
+
       const entries = Array.from(pointerState.pointers.entries()).filter(([id]) =>
         pointerState.gesturePointerIds.has(id)
       );
       if (entries.length < 2) return;
+
       const a = entries[0][1];
       const b = entries[1][1];
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+
       const scaleNew = clamp(pointerState.startScale * (dist / pointerState.startDist), 0.6, 3);
       camera.scale = scaleNew;
       camera.tx = mid.x - pointerState.worldMidStart.x * camera.scale;
       camera.ty = mid.y - pointerState.worldMidStart.y * camera.scale;
+
       if (Math.hypot(mid.x - pointerState.startMid.x, mid.y - pointerState.startMid.y) > 6) {
         pointerState.suppressTap = true;
       }
@@ -1110,6 +1345,7 @@
     function handleDoubleTap(point, event) {
       if (event.pointerType === 'mouse') return false;
       const now = performance.now();
+
       if (pointerState.lastTapTime && now - pointerState.lastTapTime < 300) {
         const prev = pointerState.lastTapPos;
         if (prev) {
@@ -1123,6 +1359,7 @@
           }
         }
       }
+
       pointerState.lastTapTime = now;
       pointerState.lastTapPos = point;
       return false;
@@ -1130,18 +1367,26 @@
 
     canvas.addEventListener('pointerdown', event => {
       if (event.pointerType === 'mouse' && event.button === 2) return;
+
+      // 音の解錠（モバイル対策）
+      ensureAudioUnlocked();
+
       canvas.setPointerCapture(event.pointerId);
       const point = getCanvasPoint(event);
+
       if (pointerState.pointers.size === 0) {
         pointerState.suppressTap = false;
         pointerState.startPoints.clear();
       }
+
       pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
       pointerState.startPoints.set(event.pointerId, { x: point.x, y: point.y });
+
       if (pointerState.pointers.size === 2) {
         pointerState.suppressTap = true;
         startGesture();
       }
+
       if (!pointerState.gestureActive) {
         const cell = pointerToCell(event);
         renderer.hoverCell = cell;
@@ -1151,29 +1396,29 @@
 
     canvas.addEventListener('pointermove', event => {
       const point = getCanvasPoint(event);
+
       if (pointerState.pointers.has(event.pointerId)) {
         pointerState.pointers.set(event.pointerId, { x: point.x, y: point.y });
         const startPoint = pointerState.startPoints.get(event.pointerId);
         if (startPoint) {
           const moved = Math.hypot(point.x - startPoint.x, point.y - startPoint.y);
-          if (moved > 6) {
-            pointerState.suppressTap = true;
-          }
+          if (moved > 6) pointerState.suppressTap = true;
         }
       }
+
       if (pointerState.gestureActive) {
         updateGesture();
         return;
       }
+
       const cell = pointerToCell(event);
       if (
         renderer.hoverCell &&
         cell &&
         renderer.hoverCell.col === cell.col &&
         renderer.hoverCell.row === cell.row
-      ) {
-        return;
-      }
+      ) return;
+
       renderer.hoverCell = cell;
       requestRender();
     });
@@ -1186,14 +1431,15 @@
     canvas.addEventListener('pointerup', event => {
       const point = getCanvasPoint(event);
       const wasGesturePointer = pointerState.gesturePointerIds.has(event.pointerId);
+
       pointerState.pointers.delete(event.pointerId);
       pointerState.startPoints.delete(event.pointerId);
+
       if (pointerState.gestureActive) {
         endGestureIfNeeded();
-        if (wasGesturePointer) {
-          return;
-        }
+        if (wasGesturePointer) return;
       }
+
       if (pointerState.suppressTap) {
         if (pointerState.pointers.size === 0) {
           pointerState.suppressTap = false;
@@ -1201,16 +1447,14 @@
         }
         return;
       }
+
       const cell = pointerToCell(event);
       renderer.hoverCell = cell;
-      if (event.pointerType === 'mouse' && event.button === 2) {
-        handleAction(cell, 'flag');
-      } else {
-        handleAction(cell, game.mode);
-      }
-      if (handleDoubleTap(point, event)) {
-        renderer.hoverCell = null;
-      }
+
+      if (event.pointerType === 'mouse' && event.button === 2) handleAction(cell, 'flag');
+      else handleAction(cell, game.mode);
+
+      if (handleDoubleTap(point, event)) renderer.hoverCell = null;
       requestRender();
     });
 
@@ -1220,9 +1464,7 @@
       endGestureIfNeeded();
     });
 
-    canvas.addEventListener('contextmenu', event => {
-      event.preventDefault();
-    });
+    canvas.addEventListener('contextmenu', event => event.preventDefault());
 
     modeOpenBtn.addEventListener('click', () => setMode('open'));
     modeFlagBtn.addEventListener('click', () => setMode('flag'));
@@ -1245,12 +1487,8 @@
       }
       resetBestState.armed = true;
       resetBestBtn.textContent = 'Tap again to confirm';
-      if (resetBestState.timeoutId) {
-        clearTimeout(resetBestState.timeoutId);
-      }
-      resetBestState.timeoutId = setTimeout(() => {
-        resetResetBestPrompt();
-      }, 3000);
+      if (resetBestState.timeoutId) clearTimeout(resetBestState.timeoutId);
+      resetBestState.timeoutId = setTimeout(() => resetResetBestPrompt(), 3000);
     });
 
     function handleConfigChange() {
@@ -1263,18 +1501,23 @@
 
     sizeSelect.addEventListener('change', handleConfigChange);
     densitySelect.addEventListener('change', handleConfigChange);
+
+    // init toggles
     vibrationToggle.checked = getVibrationEnabled();
-    vibrationToggle.addEventListener('change', () => {
-      setVibrationEnabled(vibrationToggle.checked);
-    });
+    vibrationToggle.addEventListener('change', () => setVibrationEnabled(vibrationToggle.checked));
+
     soundToggle.checked = getSoundEnabled();
-    soundToggle.addEventListener('change', () => {
-      setSoundEnabled(soundToggle.checked);
+    soundToggle.addEventListener('change', () => setSoundEnabled(soundToggle.checked));
+
+    // init volume
+    applyVolumeUI(getVolume());
+    volumeSlider.addEventListener('input', () => {
+      const v01 = Number(volumeSlider.value) / 100;
+      setVolume(v01);
+      applyVolumeUI(v01);
     });
 
     window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('pointerdown', ensureAudioUnlocked, { once: true });
-    window.addEventListener('click', ensureAudioUnlocked, { once: true });
 
     function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
