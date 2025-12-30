@@ -366,6 +366,8 @@
     const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
     const SOUND_STORAGE_KEY = 'hexMines:sound';
     const VOLUME_STORAGE_KEY = 'hexMines:volume';
+    const LONG_PRESS_MS = 420;
+    const LONG_PRESS_MOVE_PX = 10;
 
     let audioContext = null;
 
@@ -629,7 +631,12 @@
       startPoints: new Map(),
       pressPreviewId: null,
       lastTapTime: 0,
-      lastTapPos: null
+      lastTapPos: null,
+      longPressTimerId: null,
+      longPressPointerId: null,
+      longPressStart: null,
+      longPressCell: null,
+      longPressTriggered: false
     };
 
     function getConfigFromControls() {
@@ -1464,6 +1471,43 @@
       return false;
     }
 
+    function cancelLongPress() {
+      if (pointerState.longPressTimerId) {
+        clearTimeout(pointerState.longPressTimerId);
+        pointerState.longPressTimerId = null;
+      }
+      pointerState.longPressPointerId = null;
+      pointerState.longPressStart = null;
+      pointerState.longPressCell = null;
+      pointerState.longPressTriggered = false;
+    }
+
+    function scheduleLongPress(pointerId, startPoint, cell) {
+      cancelLongPress();
+      pointerState.longPressPointerId = pointerId;
+      pointerState.longPressStart = startPoint;
+      pointerState.longPressCell = cell;
+      pointerState.longPressTriggered = false;
+      pointerState.longPressTimerId = setTimeout(() => {
+        if (
+          pointerState.pointers.size !== 1 ||
+          !pointerState.pointers.has(pointerId) ||
+          pointerState.gestureActive ||
+          pointerState.suppressTap ||
+          !pointerState.longPressCell ||
+          !['closed', 'flag'].includes(pointerState.longPressCell.state)
+        ) {
+          return;
+        }
+        pointerState.longPressTriggered = true;
+        pointerState.suppressTap = true;
+        renderer.pressPreviewCell = null;
+        pointerState.pressPreviewId = null;
+        handleAction(pointerState.longPressCell, 'flag');
+        requestRender();
+      }, LONG_PRESS_MS);
+    }
+
     canvas.addEventListener('pointerdown', event => {
       if (event.pointerType === 'mouse' && event.button === 2) return;
 
@@ -1485,6 +1529,7 @@
         pointerState.suppressTap = true;
         renderer.pressPreviewCell = null;
         pointerState.pressPreviewId = null;
+        cancelLongPress();
         startGesture();
       }
 
@@ -1498,6 +1543,16 @@
             renderer.pressPreviewCell = cell;
             pointerState.pressPreviewId = event.pointerId;
           }
+        }
+        if (
+          event.pointerType !== 'mouse' &&
+          pointerState.pointers.size === 1 &&
+          !pointerState.gestureActive &&
+          cell
+        ) {
+          scheduleLongPress(event.pointerId, point, cell);
+        } else {
+          cancelLongPress();
         }
         requestRender();
       }
@@ -1522,8 +1577,23 @@
       }
 
       if (pointerState.gestureActive) {
+        cancelLongPress();
         updateGesture();
         return;
+      }
+
+      if (
+        event.pointerType !== 'mouse' &&
+        pointerState.longPressPointerId === event.pointerId &&
+        pointerState.longPressStart
+      ) {
+        const moved = Math.hypot(
+          point.x - pointerState.longPressStart.x,
+          point.y - pointerState.longPressStart.y
+        );
+        if (moved > LONG_PRESS_MOVE_PX) {
+          cancelLongPress();
+        }
       }
 
       if (event.pointerType === 'mouse') {
@@ -1544,11 +1614,35 @@
       renderer.hoverCell = null;
       renderer.pressPreviewCell = null;
       pointerState.pressPreviewId = null;
+      cancelLongPress();
       requestRender();
     });
 
     canvas.addEventListener('pointerup', event => {
       const point = getCanvasPoint(event);
+      if (pointerState.longPressPointerId === event.pointerId) {
+        if (pointerState.longPressTimerId) {
+          clearTimeout(pointerState.longPressTimerId);
+          pointerState.longPressTimerId = null;
+        }
+        if (pointerState.longPressTriggered) {
+          pointerState.pointers.delete(event.pointerId);
+          pointerState.startPoints.delete(event.pointerId);
+          if (pointerState.pressPreviewId === event.pointerId) {
+            renderer.pressPreviewCell = null;
+            pointerState.pressPreviewId = null;
+          }
+          endGestureIfNeeded();
+          if (pointerState.pointers.size === 0) {
+            pointerState.suppressTap = false;
+            pointerState.startPoints.clear();
+          }
+          cancelLongPress();
+          requestRender();
+          return;
+        }
+        cancelLongPress();
+      }
       const wasGesturePointer = pointerState.gesturePointerIds.has(event.pointerId);
 
       pointerState.pointers.delete(event.pointerId);
@@ -1590,6 +1684,7 @@
         renderer.pressPreviewCell = null;
         pointerState.pressPreviewId = null;
       }
+      cancelLongPress();
       endGestureIfNeeded();
     });
 
