@@ -302,10 +302,10 @@
       </div>
     </header>
 
-    <div class="status" id="status"></div>
+    <div class="status" id="status" aria-live="polite"></div>
 
     <div class="canvas-wrap">
-      <canvas id="board" width="800" height="600"></canvas>
+      <canvas id="board" width="800" height="600" tabindex="0" aria-label="Hex Minesweeper board. Arrow keys move. Enter opens. F toggles flag. R restarts. M toggles mode. Double-tap resets view on touch."></canvas>
       <div class="footer">
         <button id="reset-best" class="secondary" type="button">Reset Best</button>
       </div>
@@ -623,6 +623,7 @@
       originY: 0,
       hoverCell: null,
       pressPreviewCell: null,
+      keyboardCell: null,
       needsRender: true
     };
 
@@ -653,6 +654,17 @@
       longPressCell: null,
       longPressTriggered: false
     };
+
+    // Long-press feedback state (touch only)
+    let longPressFx = null;
+
+    // Keyboard focus state
+    let isKeyboardActive = false;
+
+    // High-DPI resize cache
+    let lastCanvasCssW = 0;
+    let lastCanvasCssH = 0;
+    let lastDpr = 0;
 
     function getConfigFromControls() {
       const [W, H] = sizeSelect.value.split('x').map(Number);
@@ -930,9 +942,22 @@
     // ---------- Rendering / Layout ----------
     function resizeCanvas() {
       const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.floor(rect.width * devicePixelRatio);
-      canvas.height = Math.floor(rect.height * devicePixelRatio);
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = rect.width;
+      const cssH = rect.height;
+      if (
+        Math.abs(cssW - lastCanvasCssW) < 1 &&
+        Math.abs(cssH - lastCanvasCssH) < 1 &&
+        dpr === lastDpr
+      ) {
+        return;
+      }
+      lastCanvasCssW = cssW;
+      lastCanvasCssH = cssH;
+      lastDpr = dpr;
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       fitBoard();
       requestRender();
     }
@@ -1295,16 +1320,29 @@
           const isPressPreview = renderer.pressPreviewCell &&
             renderer.pressPreviewCell.col === col &&
             renderer.pressPreviewCell.row === row;
+          const isLongPressTarget = longPressFx &&
+            longPressFx.col === col &&
+            longPressFx.row === row &&
+            !game.gameOver;
 
           const fill = cell.state === 'open' ? getCss('--tile-open') : getCss('--tile-closed');
           const stroke = getCss('--tile-outline');
+          const pressScale = isLongPressTarget ? 0.96 : 1;
 
-          drawHex(x + shakeX, y, renderer.size * 0.95, fill, stroke, 1);
+          drawHex(x + shakeX, y, renderer.size * 0.95 * pressScale, fill, stroke, 1);
 
           if (isHover && !game.gameOver && !isPressPreview) {
             ctx.save();
             ctx.globalAlpha = 0.9;
             drawHex(x + shakeX, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
+            ctx.restore();
+          }
+
+          if (isLongPressTarget) {
+            // Subtle press feedback
+            ctx.save();
+            ctx.globalAlpha = 0.25;
+            drawHex(x + shakeX, y, renderer.size * 0.88, getCss('--highlight'), 'transparent', 0);
             ctx.restore();
           }
 
@@ -1351,6 +1389,37 @@
         }
       }
 
+      if (longPressFx && !game.gameOver) {
+        // Long-press progress ring (touch only)
+        const target = offsetToPixel(longPressFx.col, longPressFx.row);
+        const progress = clamp01((performance.now() - longPressFx.startMs) / LONG_PRESS_MS);
+        ctx.save();
+        ctx.strokeStyle = getCss('--accent');
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = Math.max(2, renderer.size * 0.1);
+        ctx.beginPath();
+        const startAngle = -Math.PI / 2;
+        ctx.arc(
+          target.x,
+          target.y,
+          renderer.size * 0.85,
+          startAngle,
+          startAngle + Math.PI * 2 * progress
+        );
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (isKeyboardActive && renderer.keyboardCell) {
+        // Keyboard focus ring
+        const { x, y } = offsetToPixel(renderer.keyboardCell.col, renderer.keyboardCell.row);
+        ctx.save();
+        ctx.strokeStyle = getCss('--accent');
+        ctx.lineWidth = Math.max(2, renderer.size * 0.16);
+        drawHex(x, y, renderer.size * 1.02, 'transparent', ctx.strokeStyle, ctx.lineWidth);
+        ctx.restore();
+      }
+
       ctx.restore();
 
       // overlay fx (screen space)
@@ -1364,6 +1433,7 @@
       if (winFx && performance.now() - winFx.start < winFxDuration) requestRender();
       if (boomFx && performance.now() - boomFx.start < boomFxDuration) requestRender();
       if (chordFailFx && performance.now() - chordFailFx.start < chordFailDuration) requestRender();
+      if (longPressFx && !game.gameOver) requestRender();
       render();
       requestAnimationFrame(loop);
     }
@@ -1443,6 +1513,27 @@
       return Math.min(max, Math.max(min, value));
     }
 
+    function ensureKeyboardCell() {
+      if (!renderer.keyboardCell) {
+        renderer.keyboardCell = {
+          col: Math.floor(game.W / 2),
+          row: Math.floor(game.H / 2)
+        };
+      }
+      renderer.keyboardCell.col = clamp(renderer.keyboardCell.col, 0, game.W - 1);
+      renderer.keyboardCell.row = clamp(renderer.keyboardCell.row, 0, game.H - 1);
+    }
+
+    function zoomAt(point, scaleFactor) {
+      const worldX = (point.x - camera.tx) / camera.scale;
+      const worldY = (point.y - camera.ty) / camera.scale;
+      const nextScale = clamp(camera.scale * scaleFactor, 0.6, 3);
+      camera.scale = nextScale;
+      camera.tx = point.x - worldX * camera.scale;
+      camera.ty = point.y - worldY * camera.scale;
+      requestRender();
+    }
+
     function startGesture() {
       if (pointerState.pointers.size < 2) return;
       const entries = Array.from(pointerState.pointers.entries()).slice(0, 2);
@@ -1493,17 +1584,23 @@
       }
     }
 
-    function handleDoubleTap(point, event) {
+    function handleDoubleTap(point, event, tapDidAction) {
       if (event.pointerType === 'mouse') return false;
+      if (tapDidAction) {
+        pointerState.lastTapTime = 0;
+        pointerState.lastTapPos = null;
+        return false;
+      }
       const now = performance.now();
 
-      if (pointerState.lastTapTime && now - pointerState.lastTapTime < 300) {
+      if (pointerState.lastTapTime && now - pointerState.lastTapTime < 280) {
         const prev = pointerState.lastTapPos;
         if (prev) {
           const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
-          if (dist < 24) {
+          if (dist <= 18) {
             fitBoard();
             requestRender();
+            renderer.hoverCell = null;
             pointerState.lastTapTime = 0;
             pointerState.lastTapPos = null;
             return true;
@@ -1525,6 +1622,10 @@
       pointerState.longPressStart = null;
       pointerState.longPressCell = null;
       pointerState.longPressTriggered = false;
+      if (longPressFx) {
+        longPressFx = null;
+        requestRender();
+      }
     }
 
     function scheduleLongPress(pointerId, startPoint, cell) {
@@ -1533,6 +1634,9 @@
       pointerState.longPressStart = startPoint;
       pointerState.longPressCell = cell;
       pointerState.longPressTriggered = false;
+      // Long-press feedback (ring + press highlight)
+      longPressFx = { startMs: performance.now(), col: cell.col, row: cell.row, pointerId };
+      requestRender();
       pointerState.longPressTimerId = setTimeout(() => {
         if (
           pointerState.pointers.size !== 1 ||
@@ -1548,6 +1652,7 @@
         pointerState.suppressTap = true;
         renderer.pressPreviewCell = null;
         pointerState.pressPreviewId = null;
+        longPressFx = null;
         handleAction(pointerState.longPressCell, 'flag');
         requestRender();
       }, LONG_PRESS_MS);
@@ -1665,6 +1770,8 @@
 
     canvas.addEventListener('pointerup', event => {
       const point = getCanvasPoint(event);
+      const cell = pointerToCell(event);
+      let tapDidAction = false;
       if (pointerState.longPressPointerId === event.pointerId) {
         if (pointerState.longPressTimerId) {
           clearTimeout(pointerState.longPressTimerId);
@@ -1710,15 +1817,21 @@
         return;
       }
 
-      const cell = pointerToCell(event);
       if (event.pointerType === 'mouse') {
         renderer.hoverCell = cell;
       }
 
-      if (event.pointerType === 'mouse' && event.button === 2) handleAction(cell, 'flag');
-      else handleAction(cell, game.mode);
+      if (cell) {
+        if (event.pointerType === 'mouse' && event.button === 2) {
+          tapDidAction = true;
+          handleAction(cell, 'flag');
+        } else {
+          tapDidAction = true;
+          handleAction(cell, game.mode);
+        }
+      }
 
-      if (handleDoubleTap(point, event)) renderer.hoverCell = null;
+      handleDoubleTap(point, event, tapDidAction);
       requestRender();
     });
 
@@ -1735,6 +1848,80 @@
 
     canvas.addEventListener('contextmenu', event => event.preventDefault());
 
+    // Keyboard controls (canvas-focused only)
+    canvas.addEventListener('focus', () => {
+      isKeyboardActive = true;
+      ensureKeyboardCell();
+      requestRender();
+    });
+
+    canvas.addEventListener('blur', () => {
+      isKeyboardActive = false;
+      requestRender();
+    });
+
+    canvas.addEventListener('keydown', event => {
+      if (!isKeyboardActive) return;
+      ensureKeyboardCell();
+      const key = event.key;
+      const lower = key.toLowerCase();
+      let handled = false;
+
+      if (key === 'ArrowLeft') {
+        renderer.keyboardCell.col = clamp(renderer.keyboardCell.col - 1, 0, game.W - 1);
+        handled = true;
+      } else if (key === 'ArrowRight') {
+        renderer.keyboardCell.col = clamp(renderer.keyboardCell.col + 1, 0, game.W - 1);
+        handled = true;
+      } else if (key === 'ArrowUp') {
+        renderer.keyboardCell.row = clamp(renderer.keyboardCell.row - 1, 0, game.H - 1);
+        handled = true;
+      } else if (key === 'ArrowDown') {
+        renderer.keyboardCell.row = clamp(renderer.keyboardCell.row + 1, 0, game.H - 1);
+        handled = true;
+      } else if (key === 'Enter' || key === ' ') {
+        const cell = game.cell(renderer.keyboardCell.col, renderer.keyboardCell.row);
+        if (cell) {
+          ensureAudioUnlocked();
+          handleAction(cell, game.mode);
+        }
+        handled = true;
+      } else if (lower === 'f') {
+        const cell = game.cell(renderer.keyboardCell.col, renderer.keyboardCell.row);
+        if (cell) {
+          ensureAudioUnlocked();
+          handleAction(cell, 'flag');
+        }
+        handled = true;
+      } else if (lower === 'm') {
+        setMode(game.mode === 'open' ? 'flag' : 'open');
+        handled = true;
+      } else if (lower === 'r') {
+        resetResetBestPrompt();
+        game.stopTimer();
+        game.reset(getConfigFromControls());
+        setMode('open');
+        resizeCanvas();
+        ensureKeyboardCell();
+        handled = true;
+      } else if (key === '+' || key === '=') {
+        zoomAt({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }, 1.1);
+        handled = true;
+      } else if (key === '-') {
+        zoomAt({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }, 1 / 1.1);
+        handled = true;
+      } else if (key === '0') {
+        fitBoard();
+        requestRender();
+        handled = true;
+      }
+
+      if (handled) {
+        event.preventDefault();
+        requestRender();
+      }
+    });
+
     modeOpenBtn.addEventListener('click', () => setMode('open'));
     modeFlagBtn.addEventListener('click', () => setMode('flag'));
 
@@ -1744,6 +1931,7 @@
       game.reset(getConfigFromControls());
       setMode('open');
       resizeCanvas();
+      ensureKeyboardCell();
     });
 
     resetBestBtn.addEventListener('click', () => {
@@ -1766,6 +1954,7 @@
       game.reset(getConfigFromControls());
       setMode('open');
       resizeCanvas();
+      ensureKeyboardCell();
     }
 
     sizeSelect.addEventListener('change', handleConfigChange);
