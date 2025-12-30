@@ -380,6 +380,7 @@
     class Game {
       constructor() {
         this.mode = 'open';
+        this.triggeredMine = null;
         this.reset(getConfigFromControls());
       }
 
@@ -392,7 +393,7 @@
         for (let row = 0; row < H; row++) {
           const rowCells = [];
           for (let col = 0; col < W; col++) {
-            rowCells.push({ col, row, isMine: false, number: 0, state: 'closed' });
+            rowCells.push({ col, row, isMine: false, number: 0, state: 'closed', wrongFlag: false });
           }
           this.board.push(rowCells);
         }
@@ -405,6 +406,7 @@
         this.elapsed = 0;
         this.timerId = null;
         this.highlight = null;
+        this.triggeredMine = null;
         winFx = null;
         boomFx = null;
         chordFailFx = null;
@@ -491,7 +493,9 @@
         if (cell.isMine) {
           cell.state = 'open';
           this.gameOver = true;
+          this.triggeredMine = { col: cell.col, row: cell.row };
           this.revealMines();
+          this.markWrongFlags();
           this.stopTimer();
 
           // 派手演出
@@ -555,6 +559,17 @@
           for (let col = 0; col < this.W; col++) {
             const cell = this.board[row][col];
             if (cell.isMine) cell.state = 'open';
+          }
+        }
+      }
+
+      markWrongFlags() {
+        for (let row = 0; row < this.H; row++) {
+          for (let col = 0; col < this.W; col++) {
+            const cell = this.board[row][col];
+            if (cell.state === 'flag' && !cell.isMine) {
+              cell.wrongFlag = true;
+            }
           }
         }
       }
@@ -1042,6 +1057,19 @@
       ctx.stroke();
     }
 
+    function drawCross(x, y, size) {
+      ctx.save();
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = Math.max(2, size * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(x - size * 0.35, y - size * 0.35);
+      ctx.lineTo(x + size * 0.35, y + size * 0.35);
+      ctx.moveTo(x - size * 0.35, y + size * 0.35);
+      ctx.lineTo(x + size * 0.35, y - size * 0.35);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawNumber(x, y, number) {
       const colors = {
         1: '#2563eb',
@@ -1289,12 +1317,29 @@
 
           if (cell.state === 'open') {
             if (cell.isMine && game.gameOver) {
+              if (
+                game.triggeredMine &&
+                game.triggeredMine.col === col &&
+                game.triggeredMine.row === row
+              ) {
+                ctx.save();
+                ctx.strokeStyle = '#dc2626';
+                ctx.globalAlpha = 0.9;
+                ctx.lineWidth = Math.max(3, renderer.size * 0.18);
+                ctx.beginPath();
+                ctx.arc(x + shakeX, y, renderer.size * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+              }
               drawMine(x + shakeX, y, renderer.size);
             } else if (cell.number > 0) {
               drawNumber(x + shakeX, y, cell.number);
             }
           } else if (cell.state === 'flag') {
             drawFlag(x + shakeX, y, renderer.size);
+            if (game.gameOver && cell.wrongFlag) {
+              drawCross(x + shakeX, y, renderer.size);
+            }
           } else if (
             isHover &&
             game.mode === 'flag' &&
