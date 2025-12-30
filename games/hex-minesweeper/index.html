@@ -389,6 +389,11 @@
     const SOUND_STORAGE_KEY = 'hexMines:sound';
     const VOLUME_STORAGE_KEY = 'hexMines:volume';
     const SOLVABLE_STORAGE_KEY = 'hexMines:solvable';
+
+    // NEW: remember last played size + density
+    const LAST_SIZE_STORAGE_KEY = 'hexMines:lastSize';
+    const LAST_DENSITY_STORAGE_KEY = 'hexMines:lastDensity';
+
     const LONG_PRESS_MS = 420;
     const LONG_PRESS_MOVE_PX = 10;
 
@@ -404,6 +409,54 @@
     // FIX: track last interaction source to avoid showing keyboard focus outline on first tap
     let lastInteraction = 'pointer'; // 'pointer' | 'keyboard'
     document.addEventListener('keydown', () => { lastInteraction = 'keyboard'; }, { passive: true, capture: true });
+
+    // ---------- NEW: persist last size/density ----------
+    function safeGet(key) {
+      try { return localStorage.getItem(key); } catch (_) { return null; }
+    }
+    function safeSet(key, value) {
+      try { localStorage.setItem(key, value); } catch (_) {}
+    }
+    function hasOptionValue(selectEl, value) {
+      return Array.from(selectEl.options).some(opt => opt.value === value);
+    }
+    function setSelectValueIfExists(selectEl, value) {
+      if (value == null) return false;
+      if (!hasOptionValue(selectEl, value)) return false;
+      selectEl.value = value;
+      return true;
+    }
+    function findClosestNumericOption(selectEl, target) {
+      const opts = Array.from(selectEl.options)
+        .map(o => ({ value: o.value, num: Number.parseFloat(o.value) }))
+        .filter(o => Number.isFinite(o.num));
+      if (!opts.length || !Number.isFinite(target)) return null;
+      let best = opts[0];
+      let bestDist = Math.abs(best.num - target);
+      for (const o of opts) {
+        const d = Math.abs(o.num - target);
+        if (d < bestDist) { best = o; bestDist = d; }
+      }
+      return best.value;
+    }
+    function applyPersistedConfigToControls() {
+      const savedSize = safeGet(LAST_SIZE_STORAGE_KEY);
+      const savedDensityRaw = safeGet(LAST_DENSITY_STORAGE_KEY);
+
+      // size: exact match only
+      setSelectValueIfExists(sizeSelect, savedSize);
+
+      // density: try exact, else closest numeric option
+      if (!setSelectValueIfExists(densitySelect, savedDensityRaw)) {
+        const parsed = Number.parseFloat(savedDensityRaw);
+        const closest = findClosestNumericOption(densitySelect, parsed);
+        if (closest) densitySelect.value = closest;
+      }
+    }
+    function rememberCurrentConfigFromControls() {
+      safeSet(LAST_SIZE_STORAGE_KEY, sizeSelect.value);
+      safeSet(LAST_DENSITY_STORAGE_KEY, densitySelect.value);
+    }
 
     class Game {
       constructor() {
@@ -667,7 +720,6 @@
     }
 
     let game = null;
-    game = new Game();
 
     const renderer = {
       size: 24,
@@ -2153,6 +2205,9 @@
     });
 
     function handleConfigChange() {
+      // NEW: remember size/density whenever changed (and used next time)
+      rememberCurrentConfigFromControls();
+
       resetResetBestPrompt();
       game.stopTimer();
       game.reset(getConfigFromControls());
@@ -2208,6 +2263,13 @@
         resetBestState.timeoutId = null;
       }
     }
+
+    // ---------- NEW: apply persisted config BEFORE creating game ----------
+    applyPersistedConfigToControls();
+    rememberCurrentConfigFromControls(); // ensure defaults are stored at least once
+
+    // Create game after controls reflect last config
+    game = new Game();
 
     // Initial
     resizeCanvas(true);
