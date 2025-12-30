@@ -198,6 +198,18 @@
       color: var(--danger);
     }
 
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .canvas-wrap {
       background: var(--panel);
       border-radius: 18px;
@@ -288,6 +300,11 @@
           Sound
         </label>
 
+        <label class="toggle" for="solvable-toggle">
+          <input id="solvable-toggle" type="checkbox" />
+          Solvable
+        </label>
+
         <div class="volume" title="Sound volume">
           <span>Vol</span>
           <input id="volume-slider" type="range" min="0" max="100" step="1" />
@@ -303,6 +320,7 @@
     </header>
 
     <div class="status" id="status" aria-live="polite"></div>
+    <div id="a11y-live" class="sr-only" aria-live="polite"></div>
 
     <div class="canvas-wrap">
       <canvas id="board" width="800" height="600" tabindex="0" aria-label="Hex Minesweeper board. Arrow keys move. Enter opens. F toggles flag. R restarts. M toggles mode. Double-tap resets view on touch."></canvas>
@@ -332,9 +350,12 @@
 
     const vibrationToggle = document.getElementById('vibration-toggle');
     const soundToggle = document.getElementById('sound-toggle');
+    const solvableToggle = document.getElementById('solvable-toggle');
 
     const volumeSlider = document.getElementById('volume-slider');
     const volumeLabel = document.getElementById('volume-label');
+
+    const a11yLiveEl = document.getElementById('a11y-live');
 
     const EVEN_COL_DIRS = [
       [1, 0],
@@ -366,10 +387,12 @@
     const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
     const SOUND_STORAGE_KEY = 'hexMines:sound';
     const VOLUME_STORAGE_KEY = 'hexMines:volume';
+    const SOLVABLE_STORAGE_KEY = 'hexMines:solvable';
     const LONG_PRESS_MS = 420;
     const LONG_PRESS_MOVE_PX = 10;
 
     let audioContext = null;
+    let audioUnlocked = false;
 
     const resetBestState = {
       armed: false,
@@ -441,12 +464,23 @@
         }
 
         const minesToPlace = Math.min(this.totalMines, candidates.length);
-        shuffle(candidates);
-        for (let i = 0; i < minesToPlace; i++) {
-          candidates[i].isMine = true;
+        const maxAttempts = solvableToggle.checked ? 30 : 1;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          for (let row = 0; row < this.H; row++) {
+            for (let col = 0; col < this.W; col++) {
+              this.board[row][col].isMine = false;
+            }
+          }
+          shuffle(candidates);
+          for (let i = 0; i < minesToPlace; i++) {
+            candidates[i].isMine = true;
+          }
+          this.totalMines = minesToPlace;
+          this.computeNumbers();
+          if (!solvableToggle.checked || isSolvableByLogic(this, startCell)) {
+            break;
+          }
         }
-        this.totalMines = minesToPlace;
-        this.computeNumbers();
       }
 
       computeNumbers() {
@@ -476,6 +510,7 @@
         if (changed) {
           vibrateFlag();   // 強さは同等、2回感を強調
           playFlag();
+          announceMessage(cell.state === 'flag' ? 'Flag set.' : 'Flag removed.');
         }
         updateUI();
       }
@@ -503,6 +538,7 @@
 
           vibrateBoom();
           playBoom();
+          announceMessage('Boom. Game over.');
 
           updateUI();
           return;
@@ -594,6 +630,7 @@
           startWinFx();
           vibrateClear();
           playClear();
+          announceMessage('Clear. You win.');
           updateUI();
         }
       }
@@ -717,6 +754,16 @@
       localStorage.setItem(SOUND_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
+    function getSolvableEnabled() {
+      const stored = localStorage.getItem(SOLVABLE_STORAGE_KEY);
+      if (stored === null) return true;
+      return stored === '1';
+    }
+
+    function setSolvableEnabled(isEnabled) {
+      localStorage.setItem(SOLVABLE_STORAGE_KEY, isEnabled ? '1' : '0');
+    }
+
     function clamp01(v) {
       return Math.max(0, Math.min(1, v));
     }
@@ -783,10 +830,40 @@
       return audioContext;
     }
 
-    function ensureAudioUnlocked() {
+    async function ensureAudioUnlocked() {
+      if (audioUnlocked) return;
       if (!soundToggle.checked) return;
       const ctx = getAudioContext();
-      if (ctx.state === 'suspended') ctx.resume();
+      let didAttempt = false;
+      if (ctx.state === 'suspended') {
+        try {
+          await ctx.resume();
+        } catch (err) {
+          // ignore resume failures
+        }
+        didAttempt = true;
+      } else {
+        didAttempt = true;
+      }
+
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        gain.gain.value = 0.0001;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        const now = ctx.currentTime;
+        osc.start(now);
+        osc.stop(now + 0.01);
+        didAttempt = true;
+      } catch (err) {
+        // ignore unlock failures
+      }
+
+      if (didAttempt) {
+        audioUnlocked = true;
+      }
     }
 
     function playTone({
@@ -1002,27 +1079,33 @@
     function pixelToCell(x, y) {
       const stepX = 1.5 * renderer.size;
       const stepY = Math.sqrt(3) * renderer.size;
-      const approxCol = Math.round((x - renderer.originX) / stepX);
-      const col = Math.max(0, Math.min(game.W - 1, approxCol));
-      const approxRow = Math.round((y - renderer.originY) / stepY - 0.5 * (col % 2));
-      let best = null;
-      let bestDist = Infinity;
+      const q = (x - renderer.originX) / stepX;
+      const r = (y - renderer.originY) / stepY - q / 2;
+      const cube = cubeRound(q, -q - r, r);
+      const col = cube.x;
+      const row = cube.z + (cube.x - (cube.x & 1)) / 2;
+      if (col < 0 || col >= game.W || row < 0 || row >= game.H) return null;
+      return { col, row };
+    }
 
-      for (let r = approxRow - 1; r <= approxRow + 1; r++) {
-        for (let c = approxCol - 1; c <= approxCol + 1; c++) {
-          const cell = game.cell(c, r);
-          if (!cell) continue;
-          const center = offsetToPixel(c, r);
-          const dx = x - center.x;
-          const dy = y - center.y;
-          const dist = dx * dx + dy * dy;
-          if (dist < bestDist) {
-            bestDist = dist;
-            best = { col: c, row: r };
-          }
-        }
+    function cubeRound(x, y, z) {
+      let rx = Math.round(x);
+      let ry = Math.round(y);
+      let rz = Math.round(z);
+
+      const dx = Math.abs(rx - x);
+      const dy = Math.abs(ry - y);
+      const dz = Math.abs(rz - z);
+
+      if (dx > dy && dx > dz) {
+        rx = -ry - rz;
+      } else if (dy > dz) {
+        ry = -rx - rz;
+      } else {
+        rz = -rx - ry;
       }
-      return best;
+
+      return { x: rx, y: ry, z: rz };
     }
 
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
@@ -1462,6 +1545,117 @@
       requestRender();
     }
 
+    function announceMessage(message) {
+      if (!a11yLiveEl || !message) return;
+      a11yLiveEl.textContent = '';
+      requestAnimationFrame(() => {
+        a11yLiveEl.textContent = message;
+      });
+    }
+
+    function announceFocusedCell() {
+      if (!a11yLiveEl || !renderer.keyboardCell) return;
+      const cell = game.cell(renderer.keyboardCell.col, renderer.keyboardCell.row);
+      if (!cell) return;
+      const rowLabel = cell.row + 1;
+      const colLabel = cell.col + 1;
+      let detail = 'closed';
+      if (cell.state === 'flag') {
+        detail = 'flagged';
+      } else if (cell.state === 'open') {
+        if (cell.isMine) {
+          detail = 'open, mine';
+        } else if (cell.number > 0) {
+          detail = `open, ${cell.number} nearby`;
+        } else {
+          detail = 'open, empty';
+        }
+      }
+      announceMessage(`Row ${rowLabel} Column ${colLabel}, ${detail}`);
+    }
+
+    function isSolvableByLogic(currentGame, startCell) {
+      const state = Array.from({ length: currentGame.H }, () =>
+        Array.from({ length: currentGame.W }, () => 'closed')
+      );
+
+      const openFrom = (col, row) => {
+        const queue = [[col, row]];
+        while (queue.length) {
+          const [c, r] = queue.shift();
+          if (c < 0 || c >= currentGame.W || r < 0 || r >= currentGame.H) continue;
+          if (state[r][c] !== 'closed') continue;
+          const cell = currentGame.cell(c, r);
+          if (!cell) continue;
+          if (cell.isMine) return false;
+          state[r][c] = 'open';
+          if (cell.number === 0) {
+            currentGame.neighbors(c, r).forEach(n => {
+              if (state[n.row][n.col] === 'closed') queue.push([n.col, n.row]);
+            });
+          }
+        }
+        return true;
+      };
+
+      const flagCell = (col, row) => {
+        if (state[row][col] !== 'closed') return true;
+        const cell = currentGame.cell(col, row);
+        if (!cell || !cell.isMine) return false;
+        state[row][col] = 'flag';
+        return true;
+      };
+
+      if (!openFrom(startCell.col, startCell.row)) return false;
+
+      let progress = true;
+      while (progress) {
+        progress = false;
+        for (let row = 0; row < currentGame.H; row++) {
+          for (let col = 0; col < currentGame.W; col++) {
+            if (state[row][col] !== 'open') continue;
+            const cell = currentGame.cell(col, row);
+            if (!cell || cell.number <= 0) continue;
+
+            const neighbors = currentGame.neighbors(col, row);
+            let flagCount = 0;
+            let closedCount = 0;
+            neighbors.forEach(n => {
+              const nState = state[n.row][n.col];
+              if (nState === 'flag') flagCount += 1;
+              if (nState === 'closed') closedCount += 1;
+            });
+
+            if (flagCount === cell.number && closedCount > 0) {
+              for (const n of neighbors) {
+                if (state[n.row][n.col] === 'closed') {
+                  if (!openFrom(n.col, n.row)) return false;
+                  progress = true;
+                }
+              }
+            } else if (flagCount + closedCount === cell.number && closedCount > 0) {
+              for (const n of neighbors) {
+                if (state[n.row][n.col] === 'closed') {
+                  if (!flagCell(n.col, n.row)) return false;
+                  progress = true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (let row = 0; row < currentGame.H; row++) {
+        for (let col = 0; col < currentGame.W; col++) {
+          const cell = currentGame.cell(col, row);
+          if (!cell) continue;
+          if (!cell.isMine && state[row][col] !== 'open') return false;
+        }
+      }
+
+      return true;
+    }
+
     function setMode(mode) {
       game.mode = mode;
       modeOpenBtn.classList.toggle('active', mode === 'open');
@@ -1480,11 +1674,13 @@
           if (result.openedCount > 0 && !game.gameOver) {
             vibrateChordSuccess();
             playChordSuccess();
+            announceMessage('Chord opened.');
           }
         } else {
           vibrateChordFail();
           playChordFail();
           startChordFailFx(cell);
+          announceMessage('Chord failed.');
         }
       } else {
         game.openCell(cell);
@@ -1852,6 +2048,7 @@
     canvas.addEventListener('focus', () => {
       isKeyboardActive = true;
       ensureKeyboardCell();
+      announceFocusedCell();
       requestRender();
     });
 
@@ -1894,9 +2091,11 @@
         }
         handled = true;
       } else if (lower === 'm') {
+        ensureAudioUnlocked();
         setMode(game.mode === 'open' ? 'flag' : 'open');
         handled = true;
       } else if (lower === 'r') {
+        ensureAudioUnlocked();
         resetResetBestPrompt();
         game.stopTimer();
         game.reset(getConfigFromControls());
@@ -1918,14 +2117,22 @@
 
       if (handled) {
         event.preventDefault();
+        announceFocusedCell();
         requestRender();
       }
     });
 
-    modeOpenBtn.addEventListener('click', () => setMode('open'));
-    modeFlagBtn.addEventListener('click', () => setMode('flag'));
+    modeOpenBtn.addEventListener('click', () => {
+      ensureAudioUnlocked();
+      setMode('open');
+    });
+    modeFlagBtn.addEventListener('click', () => {
+      ensureAudioUnlocked();
+      setMode('flag');
+    });
 
     restartBtn.addEventListener('click', () => {
+      ensureAudioUnlocked();
       resetResetBestPrompt();
       game.stopTimer();
       game.reset(getConfigFromControls());
@@ -1935,6 +2142,7 @@
     });
 
     resetBestBtn.addEventListener('click', () => {
+      ensureAudioUnlocked();
       if (resetBestState.armed) {
         const config = getConfigFromControls();
         localStorage.removeItem(storageKey(config));
@@ -1966,6 +2174,9 @@
 
     soundToggle.checked = getSoundEnabled();
     soundToggle.addEventListener('change', () => setSoundEnabled(soundToggle.checked));
+
+    solvableToggle.checked = getSolvableEnabled();
+    solvableToggle.addEventListener('change', () => setSolvableEnabled(solvableToggle.checked));
 
     // init volume
     applyVolumeUI(getVolume());
