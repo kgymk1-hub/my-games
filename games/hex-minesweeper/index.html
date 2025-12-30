@@ -360,6 +360,9 @@
     let boomFx = null;
     const boomFxDuration = 900;
 
+    let chordFailFx = null;
+    const chordFailDuration = 180;
+
     const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
     const SOUND_STORAGE_KEY = 'hexMines:sound';
     const VOLUME_STORAGE_KEY = 'hexMines:volume';
@@ -402,6 +405,7 @@
         this.highlight = null;
         winFx = null;
         boomFx = null;
+        chordFailFx = null;
         if (game) updateUI();
       }
 
@@ -472,7 +476,7 @@
         updateUI();
       }
 
-      openCell(cell) {
+      openCell(cell, options = {}) {
         if (this.gameOver || cell.state !== 'closed') return;
 
         if (!this.started) {
@@ -498,11 +502,35 @@
           return;
         }
 
-        vibrateOpen();
-        playOpen();
+        if (!options.silent) {
+          vibrateOpen();
+          playOpen();
+        }
 
         this.floodOpen(cell);
         this.checkWin();
+      }
+
+      chord(cell) {
+        if (this.gameOver) return { openedCount: 0, flagMatch: false };
+        if (cell.state !== 'open' || cell.number <= 0) return { openedCount: 0, flagMatch: false };
+
+        const neighbors = this.neighbors(cell.col, cell.row);
+        const flagCount = neighbors.filter(n => n.state === 'flag').length;
+        if (flagCount !== cell.number) {
+          return { openedCount: 0, flagMatch: false };
+        }
+
+        let openedCount = 0;
+        for (const n of neighbors) {
+          if (n.state === 'closed') {
+            openedCount += 1;
+            this.openCell(n, { silent: true });
+            if (this.gameOver) break;
+          }
+        }
+
+        return { openedCount, flagMatch: true };
       }
 
       floodOpen(startCell) {
@@ -577,6 +605,7 @@
       originX: 0,
       originY: 0,
       hoverCell: null,
+      pressPreviewCell: null,
       needsRender: true
     };
 
@@ -598,6 +627,7 @@
       startTy: 0,
       suppressTap: false,
       startPoints: new Map(),
+      pressPreviewId: null,
       lastTapTime: 0,
       lastTapPos: null
     };
@@ -675,7 +705,8 @@
     }
 
     function masterVolume() {
-      return getVolume();
+      const v = getVolume();
+      return Math.pow(v, 2);
     }
 
     function maybeVibrate(pattern) {
@@ -700,6 +731,14 @@
 
     function vibrateClear() {
       maybeVibrate([20, 40, 20, 40, 60]);
+    }
+
+    function vibrateChordSuccess() {
+      maybeVibrate([18, 28, 18]);
+    }
+
+    function vibrateChordFail() {
+      maybeVibrate([80]);
     }
 
     // ---------- Sound engine ----------
@@ -848,6 +887,22 @@
       playTone({ freq: 880, durationMs: 85, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 65, startTime: base });
       playTone({ freq: 1100, durationMs: 85, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 65, startTime: base + 0.09 });
       playTone({ freq: 1320, durationMs: 125, type: 'sine', gain: 0.20, attackMs: 6, decayMs: 95, startTime: base + 0.18 });
+    }
+
+    function playChordSuccess() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      const ctx = getAudioContext();
+      const base = ctx.currentTime + 0.01;
+      playTone({ freq: 880, durationMs: 45, type: 'triangle', gain: 0.18, startTime: base });
+      playTone({ freq: 1100, durationMs: 45, type: 'triangle', gain: 0.18, startTime: base + 0.012 });
+      playTone({ freq: 1320, durationMs: 45, type: 'triangle', gain: 0.18, startTime: base + 0.024 });
+    }
+
+    function playChordFail() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      playTone({ freq: 220, durationMs: 55, type: 'sine', gain: 0.12, attackMs: 6, decayMs: 40 });
     }
 
     // ---------- Rendering / Layout ----------
@@ -1118,6 +1173,23 @@
       };
     }
 
+    function startChordFailFx(cell) {
+      chordFailFx = { col: cell.col, row: cell.row, start: performance.now() };
+      requestRender();
+    }
+
+    function chordFailOffset(cell) {
+      if (!chordFailFx) return 0;
+      if (cell.col !== chordFailFx.col || cell.row !== chordFailFx.row) return 0;
+      const t = (performance.now() - chordFailFx.start) / chordFailDuration;
+      if (t < 0 || t > 1) {
+        chordFailFx = null;
+        return 0;
+      }
+      const easeOut = 1 - t;
+      return Math.sin(t * Math.PI * 8) * 4 * easeOut;
+    }
+
     function renderBoomFx() {
       if (!boomFx) return;
 
@@ -1182,36 +1254,47 @@
       for (let row = 0; row < game.H; row++) {
         for (let col = 0; col < game.W; col++) {
           const cell = game.cell(col, row);
+          const shakeX = chordFailOffset(cell);
           const { x, y } = offsetToPixel(col, row);
           const isHover = renderer.hoverCell && renderer.hoverCell.col === col && renderer.hoverCell.row === row;
+          const isPressPreview = renderer.pressPreviewCell &&
+            renderer.pressPreviewCell.col === col &&
+            renderer.pressPreviewCell.row === row;
 
           const fill = cell.state === 'open' ? getCss('--tile-open') : getCss('--tile-closed');
           const stroke = getCss('--tile-outline');
 
-          drawHex(x, y, renderer.size * 0.95, fill, stroke, 1);
+          drawHex(x + shakeX, y, renderer.size * 0.95, fill, stroke, 1);
 
-          if (isHover && !game.gameOver) {
+          if (isHover && !game.gameOver && !isPressPreview) {
             ctx.save();
             ctx.globalAlpha = 0.9;
-            drawHex(x, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
+            drawHex(x + shakeX, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
+            ctx.restore();
+          }
+
+          if (isPressPreview && !game.gameOver) {
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            drawHex(x + shakeX, y, renderer.size * 0.98, getCss('--highlight'), 'transparent', 0);
             ctx.restore();
           }
 
           if (cell.state === 'open') {
             if (cell.isMine && game.gameOver) {
-              drawMine(x, y, renderer.size);
+              drawMine(x + shakeX, y, renderer.size);
             } else if (cell.number > 0) {
-              drawNumber(x, y, cell.number);
+              drawNumber(x + shakeX, y, cell.number);
             }
           } else if (cell.state === 'flag') {
-            drawFlag(x, y, renderer.size);
+            drawFlag(x + shakeX, y, renderer.size);
           } else if (
             isHover &&
             game.mode === 'flag' &&
             cell.state === 'closed' &&
             !game.gameOver
           ) {
-            drawFlag(x, y, renderer.size, 0.35);
+            drawFlag(x + shakeX, y, renderer.size, 0.35);
           }
         }
       }
@@ -1228,6 +1311,7 @@
     function loop() {
       if (winFx && performance.now() - winFx.start < winFxDuration) requestRender();
       if (boomFx && performance.now() - boomFx.start < boomFxDuration) requestRender();
+      if (chordFailFx && performance.now() - chordFailFx.start < chordFailDuration) requestRender();
       render();
       requestAnimationFrame(loop);
     }
@@ -1266,8 +1350,23 @@
     function handleAction(cell, actionMode) {
       if (!cell) return;
       if (game.gameOver) return;
-      if (actionMode === 'flag') game.toggleFlag(cell);
-      else game.openCell(cell);
+      if (actionMode === 'flag') {
+        game.toggleFlag(cell);
+      } else if (cell.state === 'open' && cell.number > 0) {
+        const result = game.chord(cell);
+        if (result.flagMatch) {
+          if (result.openedCount > 0 && !game.gameOver) {
+            vibrateChordSuccess();
+            playChordSuccess();
+          }
+        } else {
+          vibrateChordFail();
+          playChordFail();
+          startChordFailFx(cell);
+        }
+      } else {
+        game.openCell(cell);
+      }
       updateUI();
     }
 
@@ -1384,12 +1483,22 @@
 
       if (pointerState.pointers.size === 2) {
         pointerState.suppressTap = true;
+        renderer.pressPreviewCell = null;
+        pointerState.pressPreviewId = null;
         startGesture();
       }
 
       if (!pointerState.gestureActive) {
         const cell = pointerToCell(event);
-        renderer.hoverCell = cell;
+        if (event.pointerType === 'mouse') {
+          renderer.hoverCell = cell;
+        } else {
+          renderer.hoverCell = null;
+          if (cell && !pointerState.gestureActive) {
+            renderer.pressPreviewCell = cell;
+            pointerState.pressPreviewId = event.pointerId;
+          }
+        }
         requestRender();
       }
     });
@@ -1402,7 +1511,13 @@
         const startPoint = pointerState.startPoints.get(event.pointerId);
         if (startPoint) {
           const moved = Math.hypot(point.x - startPoint.x, point.y - startPoint.y);
-          if (moved > 6) pointerState.suppressTap = true;
+          if (moved > 6) {
+            pointerState.suppressTap = true;
+            if (pointerState.pressPreviewId === event.pointerId) {
+              renderer.pressPreviewCell = null;
+              pointerState.pressPreviewId = null;
+            }
+          }
         }
       }
 
@@ -1411,20 +1526,24 @@
         return;
       }
 
-      const cell = pointerToCell(event);
-      if (
-        renderer.hoverCell &&
-        cell &&
-        renderer.hoverCell.col === cell.col &&
-        renderer.hoverCell.row === cell.row
-      ) return;
+      if (event.pointerType === 'mouse') {
+        const cell = pointerToCell(event);
+        if (
+          renderer.hoverCell &&
+          cell &&
+          renderer.hoverCell.col === cell.col &&
+          renderer.hoverCell.row === cell.row
+        ) return;
 
-      renderer.hoverCell = cell;
-      requestRender();
+        renderer.hoverCell = cell;
+        requestRender();
+      }
     });
 
     canvas.addEventListener('pointerleave', () => {
       renderer.hoverCell = null;
+      renderer.pressPreviewCell = null;
+      pointerState.pressPreviewId = null;
       requestRender();
     });
 
@@ -1434,6 +1553,10 @@
 
       pointerState.pointers.delete(event.pointerId);
       pointerState.startPoints.delete(event.pointerId);
+      if (pointerState.pressPreviewId === event.pointerId) {
+        renderer.pressPreviewCell = null;
+        pointerState.pressPreviewId = null;
+      }
 
       if (pointerState.gestureActive) {
         endGestureIfNeeded();
@@ -1449,7 +1572,9 @@
       }
 
       const cell = pointerToCell(event);
-      renderer.hoverCell = cell;
+      if (event.pointerType === 'mouse') {
+        renderer.hoverCell = cell;
+      }
 
       if (event.pointerType === 'mouse' && event.button === 2) handleAction(cell, 'flag');
       else handleAction(cell, game.mode);
@@ -1461,6 +1586,10 @@
     canvas.addEventListener('pointercancel', event => {
       pointerState.pointers.delete(event.pointerId);
       pointerState.startPoints.delete(event.pointerId);
+      if (pointerState.pressPreviewId === event.pointerId) {
+        renderer.pressPreviewCell = null;
+        pointerState.pressPreviewId = null;
+      }
       endGestureIfNeeded();
     });
 
