@@ -254,6 +254,10 @@
           <input id="vibration-toggle" type="checkbox" />
           Vibration
         </label>
+        <label class="toggle" for="sound-toggle">
+          <input id="sound-toggle" type="checkbox" />
+          Sound
+        </label>
         <div class="segmented" role="group" aria-label="Mode toggle">
           <button id="mode-open" class="active" type="button">Open</button>
           <button id="mode-flag" type="button">Flag</button>
@@ -284,6 +288,7 @@
     const sizeSelect = document.getElementById('size-select');
     const densitySelect = document.getElementById('density-select');
     const vibrationToggle = document.getElementById('vibration-toggle');
+    const soundToggle = document.getElementById('sound-toggle');
 
     const EVEN_COL_DIRS = [
       [1, 0],
@@ -307,6 +312,8 @@
     const winFxDuration = 2000;
 
     const VIBRATION_STORAGE_KEY = 'hexMines:vibration';
+    const SOUND_STORAGE_KEY = 'hexMines:sound';
+    let audioContext = null;
 
     const resetBestState = {
       armed: false,
@@ -406,14 +413,14 @@
           changed = true;
         }
         if (changed) {
-          maybeVibrate([12, 40, 12]);
+          vibrateFlag();
+          playFlag();
         }
         updateUI();
       }
 
       openCell(cell) {
         if (this.gameOver || cell.state !== 'closed') return;
-        maybeVibrate([8, 20, 8]);
         if (!this.started) {
           this.started = true;
           this.firstCell = cell;
@@ -425,9 +432,13 @@
           this.gameOver = true;
           this.revealMines();
           this.stopTimer();
+          vibrateBoom();
+          playBoom();
           updateUI();
           return;
         }
+        vibrateOpen();
+        playOpen();
         this.floodOpen(cell);
         this.checkWin();
       }
@@ -475,6 +486,8 @@
           this.stopTimer();
           maybeUpdateBestTime(this.elapsed);
           startWinFx();
+          vibrateClear();
+          playClear();
           updateUI();
         }
       }
@@ -563,11 +576,150 @@
       localStorage.setItem(VIBRATION_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
+    function getSoundEnabled() {
+      const stored = localStorage.getItem(SOUND_STORAGE_KEY);
+      if (stored === null) return true;
+      return stored === '1';
+    }
+
+    function setSoundEnabled(isEnabled) {
+      localStorage.setItem(SOUND_STORAGE_KEY, isEnabled ? '1' : '0');
+    }
+
     function maybeVibrate(pattern) {
       if (!vibrationToggle.checked) return;
       if (navigator.vibrate) {
         navigator.vibrate(pattern);
       }
+    }
+
+    function vibrateOpen() {
+      maybeVibrate(18);
+    }
+
+    function vibrateFlag() {
+      maybeVibrate([18, 60, 18]);
+    }
+
+    function vibrateBoom() {
+      maybeVibrate([40, 60, 40, 60, 120]);
+    }
+
+    function vibrateClear() {
+      maybeVibrate([20, 40, 20, 40, 60]);
+    }
+
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
+
+    function ensureAudioUnlocked() {
+      if (!soundToggle.checked) return;
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+    }
+
+    function playTone({
+      freq,
+      durationMs,
+      type = 'sine',
+      gain = 0.2,
+      attackMs = 5,
+      decayMs = 40,
+      freqEnd = null,
+      startTime = null
+    }) {
+      if (!soundToggle.checked) return;
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      const start = startTime ?? now;
+      const osc = ctx.createOscillator();
+      const amp = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, start);
+      if (freqEnd) {
+        osc.frequency.exponentialRampToValueAtTime(freqEnd, start + durationMs / 1000);
+      }
+      amp.gain.setValueAtTime(0.0001, start);
+      const attack = Math.max(0.001, attackMs / 1000);
+      amp.gain.exponentialRampToValueAtTime(gain, start + attack);
+      const endTime = start + durationMs / 1000;
+      const decay = Math.max(0.001, decayMs / 1000);
+      amp.gain.exponentialRampToValueAtTime(0.0001, Math.max(start + attack, endTime - decay));
+      osc.connect(amp);
+      amp.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(endTime + 0.02);
+    }
+
+    function playNoise({ durationMs, gain = 0.12, startTime = null }) {
+      if (!soundToggle.checked) return;
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      const start = startTime ?? now;
+      const bufferSize = Math.max(1, Math.floor(ctx.sampleRate * (durationMs / 1000)));
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+      }
+      const source = ctx.createBufferSource();
+      const amp = ctx.createGain();
+      source.buffer = buffer;
+      amp.gain.setValueAtTime(gain, start);
+      amp.gain.exponentialRampToValueAtTime(0.0001, start + durationMs / 1000);
+      source.connect(amp);
+      amp.connect(ctx.destination);
+      source.start(start);
+      source.stop(start + durationMs / 1000 + 0.02);
+    }
+
+    function playOpen() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      playTone({ freq: 1040, durationMs: 40, type: 'triangle', gain: 0.16, attackMs: 4, decayMs: 30 });
+    }
+
+    function playFlag() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      const ctx = getAudioContext();
+      const base = ctx.currentTime + 0.01;
+      playTone({ freq: 920, durationMs: 38, type: 'triangle', gain: 0.15, attackMs: 4, decayMs: 28, startTime: base });
+      playTone({ freq: 1200, durationMs: 38, type: 'triangle', gain: 0.15, attackMs: 4, decayMs: 28, startTime: base + 0.08 });
+    }
+
+    function playBoom() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      const ctx = getAudioContext();
+      const base = ctx.currentTime + 0.01;
+      playTone({
+        freq: 160,
+        freqEnd: 80,
+        durationMs: 280,
+        type: 'sine',
+        gain: 0.28,
+        attackMs: 6,
+        decayMs: 220,
+        startTime: base
+      });
+      playNoise({ durationMs: 120, gain: 0.12, startTime: base + 0.02 });
+    }
+
+    function playClear() {
+      if (!soundToggle.checked) return;
+      ensureAudioUnlocked();
+      const ctx = getAudioContext();
+      const base = ctx.currentTime + 0.02;
+      playTone({ freq: 880, durationMs: 80, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 60, startTime: base });
+      playTone({ freq: 1100, durationMs: 80, type: 'sine', gain: 0.18, attackMs: 6, decayMs: 60, startTime: base + 0.09 });
+      playTone({ freq: 1320, durationMs: 110, type: 'sine', gain: 0.2, attackMs: 6, decayMs: 90, startTime: base + 0.18 });
     }
 
     function maybeUpdateBestTime(elapsed) {
@@ -652,7 +804,7 @@
     function drawHex(x, y, size, fillStyle, strokeStyle, lineWidth = 1) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
+        const angle = Math.PI / 180 * (60 * i + 60);
         const px = x + size * Math.cos(angle);
         const py = y + size * Math.sin(angle);
         if (i === 0) ctx.moveTo(px, py);
@@ -1115,8 +1267,14 @@
     vibrationToggle.addEventListener('change', () => {
       setVibrationEnabled(vibrationToggle.checked);
     });
+    soundToggle.checked = getSoundEnabled();
+    soundToggle.addEventListener('change', () => {
+      setSoundEnabled(soundToggle.checked);
+    });
 
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('pointerdown', ensureAudioUnlocked, { once: true });
+    window.addEventListener('click', ensureAudioUnlocked, { once: true });
 
     function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
