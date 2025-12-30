@@ -227,6 +227,7 @@
       display: block;
       border-radius: 12px;
       touch-action: none;
+      outline: none; /* FIX: remove browser focus ring */
     }
 
     .footer {
@@ -400,6 +401,10 @@
       defaultLabel: resetBestBtn.textContent
     };
 
+    // FIX: track last interaction source to avoid showing keyboard focus outline on first tap
+    let lastInteraction = 'pointer'; // 'pointer' | 'keyboard'
+    document.addEventListener('keydown', () => { lastInteraction = 'keyboard'; }, { passive: true, capture: true });
+
     class Game {
       constructor() {
         this.mode = 'open';
@@ -433,7 +438,13 @@
         winFx = null;
         boomFx = null;
         chordFailFx = null;
-        if (game) updateUI();
+
+        // FIX: always fit board on reset (restart / size change / initial)
+        if (game) {
+          fitBoard();
+          requestRender();
+          updateUI();
+        }
       }
 
       cell(col, row) {
@@ -510,7 +521,6 @@
         if (changed) {
           vibrateFlag();
           playFlag();
-          // p1: a11y detail
           announceCellAction(cell, cell.state === 'flag' ? 'Flag set' : 'Flag removed');
         }
         updateUI();
@@ -538,7 +548,6 @@
 
           vibrateBoom();
           playBoom();
-          // p1: a11y detail
           announceCellAction(cell, 'Boom. Mine');
 
           updateUI();
@@ -552,7 +561,6 @@
 
         this.floodOpen(cell);
 
-        // p1: a11y detail (what opened)
         if (!options.silent) {
           announceCellAction(cell, cell.number > 0 ? `Opened. ${cell.number} nearby` : 'Opened. Empty');
         }
@@ -813,23 +821,18 @@
       return audioContext;
     }
 
-    // p2: More robust unlock (event-callback direct)
     function unlockAudioNow() {
       if (audioUnlocked) return;
       if (!soundToggle.checked) return;
 
       const ctx = getAudioContext();
 
-      // iOS/Safari: must be called directly in user gesture callback
       try {
         if (ctx.state === 'suspended') {
-          ctx.resume(); // do not await (keep in callback sync flow)
+          ctx.resume();
         }
-      } catch (err) {
-        // ignore
-      }
+      } catch (err) {}
 
-      // Play a tiny silent sound immediately
       try {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -840,14 +843,11 @@
         const now = ctx.currentTime;
         osc.start(now);
         osc.stop(now + 0.01);
-      } catch (err) {
-        // ignore
-      }
+      } catch (err) {}
 
       audioUnlocked = true;
     }
 
-    // One-shot global unlock on first gesture (helps strict mobile browsers)
     document.addEventListener('pointerdown', () => unlockAudioNow(), { passive: true, once: true });
     document.addEventListener('keydown', () => unlockAudioNow(), { passive: true, once: true });
 
@@ -997,24 +997,27 @@
     }
 
     // ---------- Rendering / Layout ----------
-    function resizeCanvas() {
+    function resizeCanvas(force = false) {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       const cssW = rect.width;
       const cssH = rect.height;
-      if (
-        Math.abs(cssW - lastCanvasCssW) < 1 &&
-        Math.abs(cssH - lastCanvasCssH) < 1 &&
-        dpr === lastDpr
-      ) {
-        return;
-      }
+
+      const sizeChanged =
+        Math.abs(cssW - lastCanvasCssW) >= 1 ||
+        Math.abs(cssH - lastCanvasCssH) >= 1 ||
+        dpr !== lastDpr;
+
+      if (!force && !sizeChanged) return;
+
       lastCanvasCssW = cssW;
       lastCanvasCssH = cssH;
       lastDpr = dpr;
+
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(cssH * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
       fitBoard();
       requestRender();
     }
@@ -1056,7 +1059,6 @@
       return { x, y };
     }
 
-    // p0 already: cube/axial based conversion
     function pixelToCell(x, y) {
       const stepX = 1.5 * renderer.size;
       const stepY = Math.sqrt(3) * renderer.size;
@@ -1468,7 +1470,8 @@
         ctx.restore();
       }
 
-      if (isKeyboardActive && renderer.keyboardCell) {
+      // FIX: only show keyboard focus hex when user actually used keyboard
+      if (isKeyboardActive && renderer.keyboardCell && lastInteraction === 'keyboard') {
         const { x, y } = offsetToPixel(renderer.keyboardCell.col, renderer.keyboardCell.row);
         ctx.save();
         ctx.strokeStyle = getCss('--accent');
@@ -1518,7 +1521,6 @@
       requestRender();
     }
 
-    // p1: richer a11y helper
     function announceCellAction(cell, actionText) {
       if (!cell) return;
       const rowLabel = cell.row + 1;
@@ -1641,7 +1643,6 @@
       game.mode = mode;
       modeOpenBtn.classList.toggle('active', mode === 'open');
       modeFlagBtn.classList.toggle('active', mode === 'flag');
-      // p1: announce mode change for a11y
       announceMessage(mode === 'open' ? 'Mode: Open' : 'Mode: Flag');
       requestRender();
     }
@@ -1837,10 +1838,14 @@
     }
 
     canvas.addEventListener('pointerdown', event => {
+      lastInteraction = 'pointer'; // FIX: pointer interaction
       if (event.pointerType === 'mouse' && event.button === 2) return;
 
-      // p2: unlock directly in callback
       unlockAudioNow();
+
+      // FIX: avoid showing keyboard focus hex due to tap-focus
+      isKeyboardActive = false;
+      renderer.keyboardCell = null;
 
       canvas.setPointerCapture(event.pointerId);
       const point = getCanvasPoint(event);
@@ -2027,6 +2032,13 @@
     canvas.addEventListener('contextmenu', event => event.preventDefault());
 
     canvas.addEventListener('focus', () => {
+      // FIX: only treat as keyboard navigation if focus came from keyboard
+      if (lastInteraction !== 'keyboard') {
+        isKeyboardActive = false;
+        renderer.keyboardCell = null;
+        requestRender();
+        return;
+      }
       isKeyboardActive = true;
       ensureKeyboardCell();
       announceFocusedCell();
@@ -2039,6 +2051,7 @@
     });
 
     canvas.addEventListener('keydown', event => {
+      lastInteraction = 'keyboard';
       if (!isKeyboardActive) return;
       ensureKeyboardCell();
       const key = event.key;
@@ -2081,7 +2094,7 @@
         game.stopTimer();
         game.reset(getConfigFromControls());
         setMode('open');
-        resizeCanvas();
+        resizeCanvas(true); // FIX: force fit
         ensureKeyboardCell();
         handled = true;
       } else if (key === '+' || key === '=') {
@@ -2118,8 +2131,7 @@
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas();
-      ensureKeyboardCell();
+      resizeCanvas(true); // FIX: force fit even if canvas size unchanged
       announceMessage('Restarted.');
     });
 
@@ -2145,8 +2157,7 @@
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas();
-      ensureKeyboardCell();
+      resizeCanvas(true); // FIX: force fit on size/density change
       announceMessage('New game settings applied.');
     }
 
@@ -2159,7 +2170,6 @@
     soundToggle.checked = getSoundEnabled();
     soundToggle.addEventListener('change', () => {
       setSoundEnabled(soundToggle.checked);
-      // allow unlocking again when turned on
       if (soundToggle.checked) {
         audioUnlocked = false;
         announceMessage('Sound on.');
@@ -2181,7 +2191,7 @@
       applyVolumeUI(v01);
     });
 
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', () => resizeCanvas(true)); // FIX: keep fitting on resize/orientation
 
     function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -2199,7 +2209,8 @@
       }
     }
 
-    resizeCanvas();
+    // Initial
+    resizeCanvas(true);
     updateUI();
     loop();
   </script>
