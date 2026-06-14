@@ -918,10 +918,10 @@ function canMove(block, dx, dy){
 function getValidMovesFor(index){
   const b = blocks[index];
   const dirs = [
-    {dx:0, dy:-1, cls:'arrow-top',    ch:'&#9650;', dir:0},
-    {dx:0, dy: 1, cls:'arrow-bottom', ch:'&#9660;', dir:1},
-    {dx:-1,dy: 0, cls:'arrow-left',   ch:'&#9664;', dir:2},
-    {dx: 1,dy: 0, cls:'arrow-right',  ch:'&#9654;', dir:3}
+    {dx:0, dy:-1, cls:'arrow-top',    ch:'▲', dir:0},
+    {dx:0, dy: 1, cls:'arrow-bottom', ch:'▼', dir:1},
+    {dx:-1,dy: 0, cls:'arrow-left',   ch:'◀', dir:2},
+    {dx: 1,dy: 0, cls:'arrow-right',  ch:'▶', dir:3}
   ];
   return dirs.filter(d => canMove(b, d.dx, d.dy));
 }
