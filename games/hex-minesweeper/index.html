@@ -2194,7 +2194,8 @@
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas(true); even if canvas size unchanged
+      // Force a redraw even if the canvas size is unchanged.
+      resizeCanvas(true);
       announceMessage('Restarted.');
     });
 
@@ -2223,7 +2224,8 @@
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas(true); on size/density change
+      // Force a redraw after size/density changes.
+      resizeCanvas(true);
       announceMessage('New game settings applied.');
     }
 
