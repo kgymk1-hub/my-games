@@ -488,7 +488,7 @@
       noiseBuffer = buffer;
     }
 
-    // Slide "シュッ"（差し替え版）
+    // スライド時の短い風切り音を再生する。
     function playSlideSound() {
       if (!soundSettings.enabled) return;
       ensureAudioContext();
@@ -559,7 +559,7 @@
       whistle.stop(now + duration + 0.03);
     }
 
-    // Merge "シャキーン"（差し替え版）
+    // 合体時の金属的な効果音を再生する。
     function playMergeSound(mergeValue = 2) {
       if (!soundSettings.enabled) return;
       ensureAudioContext();

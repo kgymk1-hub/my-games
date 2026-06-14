@@ -962,7 +962,7 @@
     sizeSelect.addEventListener("change", onSettingsChanged);
     colorSelect.addEventListener("change", onSettingsChanged);
 
-    // ★クリックではなく pointerdown で「タップ瞬間」を取る
+    // pointerdown でタップ直後の反応を出す。
     gridEl.addEventListener("pointerdown", onGridPointerDown);
     gridEl.addEventListener("pointermove", onGridPointerMove);
     gridEl.addEventListener("pointerleave", onGridPointerLeave);

@@ -686,7 +686,7 @@ const MODES = {
 
 const START_MAIN_X = 4;
 const START_MAIN_Y = 3;
-const MIN_SHUFFLE_STEPS = 120; // ★100回以上（余裕を持って120）
+const MIN_SHUFFLE_STEPS = 120; // 十分に崩した初期配置だけを採用する。
 
 const NAME_POOLS = {
   up: [
@@ -697,7 +697,7 @@ const NAME_POOLS = {
   ]
 };
 
-// ★「ゴール状態」（ここから崩すので必ず解ける）
+// ゴール状態から逆向きに崩すことで解ける盤面を作る。
 // 盤面は6x5、空き2マス
 const goalBase = {
   up: [
@@ -781,7 +781,7 @@ let autoTimer = null;
 let solverWorker = null;
 let solverCancelToken = 0;
 
-// ★現在の「問題（初期配置）」を保存：最初に戻す＝これに戻る
+// 現在の初期配置を保持し、「最初に戻す」で復元する。
 let currentPuzzleStart = null;
 
 function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
@@ -854,7 +854,7 @@ function switchMode(next){
   mode = next;
   setModeUI();
   loadBest();
-  newProblem(); // ★モード切替は新規問題を作る
+  newProblem(); // モード切替時は新しい問題を生成する。
 }
 
 function resetGame(){
@@ -879,7 +879,7 @@ function newProblem(){
   stopAuto();
   cancelSolver();
 
-  // ★解ける前提：ゴール状態から崩す
+  // ゴール状態から崩して解ける問題を生成する。
   blocks = deepCopy(goalBase[mode]);
   generateSolvablePuzzleUnique(); // blocks が「新問題の初期配置」になる
 
@@ -1196,7 +1196,7 @@ function isMainAtStart(){
   return !!main && main.x === START_MAIN_X && main.y === START_MAIN_Y;
 }
 
-// ★ゴールに近い方からチーム名を割り付け（新潟は固定）
+// ゴールに近いブロックからチーム名を割り付ける（新潟は固定）。
 function assignNamesByProximity(){
   const pool = NAME_POOLS[mode].slice();
   const idxs = [];
@@ -1233,7 +1233,7 @@ function packStateBigInt(blocks){
   return key;
 }
 
-// ★ランダムウォーク中に「新潟が右下」になった局面を候補として拾う
+// ランダムウォーク中に新潟ブロックが右下にある局面を候補にする。
 function scrambleWalkCollect(maxSteps){
   let last = null; // {index, dx, dy}
   const candidates = [];
@@ -1271,7 +1271,7 @@ function scrambleWalkCollect(maxSteps){
   return candidates;
 }
 
-// ★直前と同じ盤面のときだけ再生成し、必ず「右下スタート＋100回以上崩し」を満たす
+// 直前と同じ盤面を避け、右下スタートかつ十分に崩れた問題を選ぶ。
 function generateSolvablePuzzleUnique(){
   const lastKeyStore = `myGames:slideBlock:lastGeneratedState:${mode}:v1`;
   const lastKey = SafeStorage.get(lastKeyStore) || '';
@@ -1901,7 +1901,7 @@ function init(){
   setModeUI();
   loadBest();
 
-  // ★最初の問題を生成
+  // 最初の問題を生成する。
   newProblem();
 
   requestAnimationFrame(fitBoard);
