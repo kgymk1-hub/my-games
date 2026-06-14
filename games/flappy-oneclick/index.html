@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>Flappy One-Click</title>
   <style>
     :root {
@@ -122,9 +123,9 @@
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
+  <canvas id="game" role="img" aria-label="Flappy One-Click board. Click, tap, or press Space to flap and avoid pipes."></canvas>
   <div class="ui">
-    <div class="score" id="score">0</div>
+    <div class="score" id="score" aria-live="polite">0</div>
   </div>
   <button class="mute" id="muteBtn" aria-label="Toggle sound">Sound: On</button>
   <div class="overlay" id="overlay">
@@ -137,7 +138,10 @@
     </div>
   </div>
 
-  <script>
+  <script src="../../shared/storage.js"></script>
+<script src="../../shared/audio.js"></script>
+<script src="../../shared/resize.js"></script>
+<script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
     const scoreEl = document.getElementById("score");
@@ -180,11 +184,14 @@
     let pipes = [];
     let state = "ready";
     let score = 0;
-    let bestScore = Number(localStorage.getItem("flappyOneClickBest") || 0);
+    let bestScore = Number(SafeStorage.get("myGames:flappyOneClick:bestScore:v1") || SafeStorage.get("flappyOneClickBest") || 0);
     let lastTime = 0;
     let audioReady = false;
+    const audioBus = window.createAudioBus ? createAudioBus({ volume: 1 }) : null;
     let audioCtx = null;
-    let muted = false;
+    let audioMaster = null;
+    let muted = SafeStorage.get("myGames:flappyOneClick:muted:v1", "false") === "true";
+    let animationId = 0;
 
     const clouds = Array.from({ length: 6 }, (_, i) => ({
       x: i * 180 + 40,
@@ -263,7 +270,7 @@
       overlayScore.textContent = `Score: ${score}`;
       if (score > bestScore) {
         bestScore = score;
-        localStorage.setItem("flappyOneClickBest", String(bestScore));
+        SafeStorage.set("myGames:flappyOneClick:bestScore:v1", String(bestScore));
       }
       overlayBest.textContent = `Best: ${bestScore}`;
       overlay.classList.add("visible");
@@ -474,11 +481,17 @@
       }
 
       render();
-      requestAnimationFrame(tick);
+      if (document.visibilityState === "visible") {
+        animationId = requestAnimationFrame(tick);
+      }
     }
 
     function ensureAudio() {
-      if (!audioCtx) {
+      if (audioBus) {
+        const audioState = audioBus.ensure();
+        audioCtx = audioState.ctx;
+        audioMaster = audioState.master;
+      } else if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (audioCtx.state === "suspended") {
@@ -495,7 +508,7 @@
       oscillator.frequency.value = freq;
       gain.gain.value = volume;
       oscillator.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(audioMaster || audioCtx.destination);
       oscillator.start();
       gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
       oscillator.stop(audioCtx.currentTime + duration);
@@ -525,10 +538,22 @@
 
     function toggleMute() {
       muted = !muted;
+      SafeStorage.set("myGames:flappyOneClick:muted:v1", String(muted));
       muteBtn.textContent = muted ? "Sound: Off" : "Sound: On";
+      muteBtn.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off");
     }
 
-    window.addEventListener("resize", resizeCanvas);
+    const scheduleResize = window.createRafScheduler ? createRafScheduler(resizeCanvas) : resizeCanvas;
+    window.addEventListener("resize", scheduleResize);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        lastTime = 0;
+        if (!animationId) animationId = requestAnimationFrame(tick);
+      } else if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = 0;
+      }
+    });
     window.addEventListener("pointerdown", (event) => {
       if (event.button === 0) {
         handleInput();
@@ -555,7 +580,9 @@
     overlayScore.textContent = "Score: 0";
     overlayBest.textContent = `Best: ${bestScore}`;
     resetGame();
-    requestAnimationFrame(tick);
+    muteBtn.textContent = muted ? "Sound: Off" : "Sound: On";
+    muteBtn.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off");
+    animationId = requestAnimationFrame(tick);
   </script>
 </body>
 </html>

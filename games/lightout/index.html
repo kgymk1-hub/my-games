@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>5x5 ライツアウト</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
@@ -252,12 +253,15 @@
     <div id="message" class="message" aria-live="polite"></div>
   </div>
 
-  <script>
+  <script src="../../shared/storage.js"></script>
+<script>
     const SIZE = 5;
     const N = SIZE * SIZE;
 
-    const BEST_MOVES_KEY   = "lightsout_5x5_best_moves_v3";
-    const BEST_TIME_MS_KEY = "lightsout_5x5_best_time_ms_v3";
+    const BEST_MOVES_KEY   = "myGames:lightsout:bestMoves:5x5:v3";
+    const BEST_TIME_MS_KEY = "myGames:lightsout:bestTimeMs:5x5:v3";
+    const LEGACY_BEST_MOVES_KEY = "lightsout_5x5_best_moves_v3";
+    const LEGACY_BEST_TIME_MS_KEY = "lightsout_5x5_best_time_ms_v3";
 
     let board = [];
     let moveCount = 0;
@@ -317,26 +321,26 @@
 
     // ----- high score (moves / time) -----
     function loadBestMoves(){
-      const v = localStorage.getItem(BEST_MOVES_KEY);
+      const v = SafeStorage.get(BEST_MOVES_KEY) || SafeStorage.get(LEGACY_BEST_MOVES_KEY);
       if (v === null) return null;
       const n = Number(v);
       return Number.isFinite(n) && n >= 0 ? n : null;
     }
 
     function loadBestTimeMs(){
-      const v = localStorage.getItem(BEST_TIME_MS_KEY);
+      const v = SafeStorage.get(BEST_TIME_MS_KEY) || SafeStorage.get(LEGACY_BEST_TIME_MS_KEY);
       if (v === null) return null;
       const n = Number(v);
       return Number.isFinite(n) && n >= 0 ? n : null;
     }
 
     function setBestMoves(n){
-      localStorage.setItem(BEST_MOVES_KEY, String(n));
+      SafeStorage.set(BEST_MOVES_KEY, String(n));
       renderBestScores();
     }
 
     function setBestTimeMs(ms){
-      localStorage.setItem(BEST_TIME_MS_KEY, String(ms));
+      SafeStorage.set(BEST_TIME_MS_KEY, String(ms));
       renderBestScores();
     }
 
@@ -393,7 +397,7 @@
 
     // ----- grid -----
     function createGrid(){
-      gridEl.innerHTML = "";
+      gridEl.textContent = "";
       board = [];
 
       for (let r = 0; r < SIZE; r++){

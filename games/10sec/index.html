@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>10秒チャレンジ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
@@ -136,6 +137,7 @@
   <button id="resetBtn" type="button" style="background:#8892a6;">ランキングをリセット</button>
 </div>
 
+<script src="../../shared/storage.js"></script>
 <script>
   let startTime = null;
   let isRunning = false;
@@ -147,7 +149,8 @@
   const resetBtn = document.getElementById('resetBtn');
 
   // ---- ランキング保存キー（上位10件）----
-  const RANK_KEY = "tenSecChallenge_rankings_v2";
+  const RANK_KEY = "myGames:tenSecChallenge:rankings:v2";
+  const LEGACY_RANK_KEY = "tenSecChallenge_rankings_v2";
   const MAX_RANK = 10;
 
   // ---- 二重発火防止（pointerdown→click など）----
@@ -174,7 +177,7 @@
 
   function loadRankings() {
     try {
-      const raw = localStorage.getItem(RANK_KEY);
+      const raw = SafeStorage.get(RANK_KEY) || SafeStorage.get(LEGACY_RANK_KEY);
       if (!raw) return [];
       const arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
@@ -192,7 +195,7 @@
   }
 
   function saveRankings(ranks) {
-    localStorage.setItem(RANK_KEY, JSON.stringify(ranks));
+    SafeStorage.set(RANK_KEY, JSON.stringify(ranks));
   }
 
   // diff 小さいほど上位。完全同点なら elapsed 小さい方を上位（好みで変更OK）。
@@ -205,31 +208,41 @@
   // ★修正: ハイスコア表示を廃止して「上位10位のリスト」だけ表示
   function renderRankings(ranks) {
     const sorted = [...ranks].sort(compareRecord).slice(0, MAX_RANK);
+    hiscoreDisplay.textContent = "";
 
-    let html = "";
-    html += `<div class="rankhead">ランキング（上位${MAX_RANK}件）</div>`;
+    const head = document.createElement("div");
+    head.className = "rankhead";
+    head.textContent = `ランキング（上位${MAX_RANK}件）`;
+    hiscoreDisplay.appendChild(head);
 
     if (!sorted.length) {
-      html += `まだ記録がありません。`;
-      hiscoreDisplay.innerHTML = html;
+      hiscoreDisplay.appendChild(document.createTextNode("まだ記録がありません。"));
       return;
     }
 
-    html += `<ol class="ranklist">`;
-    for (let i = 0; i < sorted.length; i++) {
-      const r = sorted[i];
-      html += `<li class="rankitem">誤差 <b class="mono">${r.diff.toFixed(3)} 秒</b> / `;
-      html += `記録 <span class="mono">${r.elapsed.toFixed(3)} 秒</span><br>`;
-      html += `<span style="color:#666;">${formatDate(r.ts)}</span></li>`;
+    const list = document.createElement("ol");
+    list.className = "ranklist";
+    for (const r of sorted) {
+      const item = document.createElement("li");
+      item.className = "rankitem";
+
+      const diff = document.createElement("b");
+      diff.className = "mono";
+      diff.textContent = `${r.diff.toFixed(3)} 秒`;
+
+      const elapsed = document.createElement("span");
+      elapsed.className = "mono";
+      elapsed.textContent = `${r.elapsed.toFixed(3)} 秒`;
+
+      const date = document.createElement("span");
+      date.style.color = "#666";
+      date.textContent = formatDate(r.ts);
+
+      item.append("誤差 ", diff, " / 記録 ", elapsed, document.createElement("br"), date);
+      list.appendChild(item);
     }
-    html += `</ol>`;
-
-    hiscoreDisplay.innerHTML = html;
+    hiscoreDisplay.appendChild(list);
   }
-
-  // 初期表示
-  let rankings = loadRankings();
-  renderRankings(rankings);
 
   function setRunningUI(running) {
     isRunning = running;
@@ -334,7 +347,7 @@
     }
     if (isRunning) return;
 
-    localStorage.removeItem(RANK_KEY);
+    SafeStorage.remove(RANK_KEY);
     rankings = [];
     renderRankings(rankings);
     resultDisplay.textContent = "ランキングをリセットしました";

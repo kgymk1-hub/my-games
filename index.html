@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ブラウザゲーム集</title>
+  <link rel="stylesheet" href="shared/common.css" />
   <style>
     body{
       margin:0;
@@ -105,72 +106,33 @@
   </div>
 
   <script>
-    // ▼▼▼ ここだけ増やせばメニューに自動で追加されます ▼▼▼
-    const games = [
-      {
-        title: "10秒チャレンジ",
-        desc: "体感10秒を狙うシンプルゲーム。誤差が小さいほど高スコア。",
-        path: "games/10sec/index.html",
-        tag: "#10秒 #短時間 #タイミング"
-      },
-      {
-        title: "さめがめ",
-        desc: "同じ色のブロックがくっついた塊を選んで消す。まとめて消すと高得点。",
-        path: "games/samegame/index.html",
-        tag: "#消去パズル #同色連結 #スコアアタック"
-      },
-      {
-        title: "lightout",
-        desc: "マスを押すと自分と周囲の灯りが反転。すべての灯りを消すとクリア。",
-        path: "games/lightout/index.html",
-        tag: "#論理パズル #脳トレ #思考力 #数学的思考"
-      },
-      {
-        title: "HITandBLOW",
-        desc: "位置も数字も当たればHIT、数字だけ当たればBLOW。数字当てゲーム。",
-        path: "games/HITandBLOW/index.html",
-        tag: "#論理ゲーム #推理 #数字当て"
-      },
-      {
-        title: "Slide Block",
-        desc: "スライドブロックパズル。アイシテルニイガタ。",
-        path: "games/Slide Block/index.html",
-        tag: "#スライドブロック #パズル"
-      },
-      {
-        title: "2048",
-        desc: "",
-        path: "games/2048/index.html",
-        tag: "#"
-      },
-
-      {
-        title: "HEX MINESWEEPER",
-        desc: "",
-        path: "games/hex-minesweeper/index.html",
-        tag: "#"
-      },
-      
-      {
-        title: "flappy-oneclick",
-        desc: "",
-        path: "games/flappy-oneclick/index.html",
-        tag: "#"
-      },
-  
-      // 例：ゲームを増やすときはこの形で1件追加
-      // {
-      //   title: "連打ゲーム",
-      //   desc: "10秒間で何回クリックできる？",
-      //   path: "games/clicker/index.html",
-      //   tag: "#連打 #短時間"
-      // },
+    const fallbackGames = [
+      { title: "10秒チャレンジ", desc: "体感10秒を狙うシンプルゲーム。誤差が小さいほど高スコア。", path: "games/10sec/index.html", tags: ["10秒", "短時間", "タイミング"] },
+      { title: "さめがめ", desc: "同じ色のブロックがくっついた塊を選んで消す。まとめて消すと高得点。", path: "games/samegame/index.html", tags: ["消去パズル", "同色連結", "スコアアタック"] },
+      { title: "Lights Out", desc: "マスを押すと自分と周囲の灯りが反転。すべての灯りを消すとクリア。", path: "games/lightout/index.html", tags: ["論理パズル", "脳トレ", "数学的思考"] },
+      { title: "HITandBLOW", desc: "位置も数字も当たればHIT、数字だけ当たればBLOW。数字当てゲーム。", path: "games/HITandBLOW/index.html", tags: ["論理ゲーム", "推理", "数字当て"] },
+      { title: "Slide Block", desc: "アイシテルニイガタを完成させるスライドブロックパズル。", path: "games/Slide Block/index.html", tags: ["スライドブロック", "パズル"] },
+      { title: "2048", desc: "同じ数字タイルを合体させて2048以上を目指す定番パズル。", path: "games/2048/index.html", tags: ["数字パズル", "合体", "スコアアタック"] },
+      { title: "Hex Minesweeper", desc: "六角形の盤面で地雷を避けながら安全マスを開くマインスイーパー。", path: "games/hex-minesweeper/index.html", tags: ["マインスイーパー", "六角形", "論理パズル"] },
+      { title: "Flappy One-Click", desc: "クリック・タップ・Spaceだけで鳥を飛ばし、パイプを避けるワンボタンゲーム。", path: "games/flappy-oneclick/index.html", tags: ["アクション", "ワンボタン", "反射神経"] }
     ];
-    // ▲▲▲ ここだけ ▲▲▲
+
+    async function loadGames() {
+      try {
+        const res = await fetch("games.json", { cache: "no-cache" });
+        if (!res.ok) throw new Error(`games.json: ${res.status}`);
+        const data = await res.json();
+        return Array.isArray(data) ? data : fallbackGames;
+      } catch (_) {
+        return fallbackGames;
+      }
+    }
 
     const list = document.getElementById("gameList");
 
-    games.forEach(g => {
+    function renderGames(games) {
+      list.textContent = "";
+      games.forEach(g => {
       const card = document.createElement("section");
       card.className = "card";
 
@@ -187,13 +149,14 @@
 
       const tag = document.createElement("span");
       tag.className = "tag";
-      tag.textContent = g.tag || "";
+      const tags = Array.isArray(g.tags) ? g.tags.map(t => `#${t}`).join(" ") : (g.tag || "");
+      tag.textContent = tags;
 
       const a = document.createElement("a");
       a.className = "btn";
       a.textContent = "あそぶ";
 
-      // hrefは innerHTML 埋め込みを避け、属性として安全にセット
+      // hrefは属性として安全にセット
       // ついでに「空/不正」対策：pathが無ければボタン無効化
       if (typeof g.path === "string" && g.path.trim() !== "") {
         a.href = g.path;
@@ -209,7 +172,10 @@
       row.append(tag, a);
       card.append(title, desc, row);
       list.appendChild(card);
-    });
+      });
+    }
+
+    loadGames().then(renderGames);
   </script>
 </body>
 </html>

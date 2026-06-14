@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>HITandBLOW</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
@@ -345,7 +346,8 @@
     </div>
   </div>
 
-  <script>
+  <script src="../../shared/storage.js"></script>
+<script>
     // ====== 状態 ======
     let secretNumber = "";
     let attempts = 0;
@@ -353,7 +355,8 @@
     let busy = false; // Enter連打・二重発火対策
 
     // LocalStorage（バージョン付き）
-    const STATS_KEY = "hitandblow_stats_v1";
+    const STATS_KEY = "myGames:hitandblow:stats:v1";
+    const LEGACY_STATS_KEY = "hitandblow_stats_v1";
 
     function generateSecret() {
       const digits = ["0","1","2","3","4","5","6","7","8","9"];
@@ -450,7 +453,7 @@
     // ====== 記録（統計） ======
     function loadStats() {
       try {
-        const raw = localStorage.getItem(STATS_KEY);
+        const raw = SafeStorage.get(STATS_KEY) || SafeStorage.get(LEGACY_STATS_KEY);
         if (!raw) {
           return { counts: {}, totalClears: 0, totalAttempts: 0 };
         }
@@ -467,7 +470,7 @@
     }
 
     function saveStats(stats) {
-      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      SafeStorage.set(STATS_KEY, JSON.stringify(stats));
     }
 
     function addClearRecord(clearAttempts) {
@@ -481,8 +484,14 @@
     }
 
     function clearStats() {
-      localStorage.removeItem(STATS_KEY);
+      SafeStorage.remove(STATS_KEY);
       renderStats();
+    }
+
+    function appendStatsCell(row, text) {
+      const cell = document.createElement("div");
+      cell.textContent = text;
+      row.appendChild(cell);
     }
 
     function renderStats() {
@@ -502,16 +511,18 @@
         `総クリア回数：${total}回 / ベスト：${best ?? "-"} / 平均：${avg === null ? "-" : avg.toFixed(2)}`;
 
       // テーブル再構築
-      tableEl.innerHTML = "";
+      tableEl.textContent = "";
       const head = document.createElement("div");
       head.className = "stats-row stats-head";
-      head.innerHTML = "<div>クリア回数</div><div>回数</div>";
+      appendStatsCell(head, "クリア回数");
+      appendStatsCell(head, "回数");
       tableEl.appendChild(head);
 
       if (!keys.length) {
         const row = document.createElement("div");
         row.className = "stats-row";
-        row.innerHTML = "<div>-</div><div>まだ記録がありません</div>";
+        appendStatsCell(row, "-");
+        appendStatsCell(row, "まだ記録がありません");
         tableEl.appendChild(row);
         return;
       }
@@ -520,12 +531,12 @@
       for (const k of keys) {
         const row = document.createElement("div");
         row.className = "stats-row";
-        row.innerHTML = `<div>${k}回</div><div>${stats.counts[String(k)]}回</div>`;
+        appendStatsCell(row, `${k}回`);
+        appendStatsCell(row, `${stats.counts[String(k)]}回`);
         tableEl.appendChild(row);
       }
     }
 
-    // ====== ゲーム制御 ======
     function setGameEnabled(enabled) {
       const input = document.getElementById("guessInput");
       const btn = document.getElementById("guessButton");
@@ -542,7 +553,7 @@
       document.getElementById("guessInput").value = "";
       setGameEnabled(true);
       setMessage("", "");
-      document.getElementById("logBody").innerHTML = "";
+      document.getElementById("logBody").textContent = "";
       updateLogEmptyState();
       setAttemptBadge();
 
