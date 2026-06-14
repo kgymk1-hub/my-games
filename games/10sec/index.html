@@ -120,6 +120,22 @@
       height: 1px;
       background: rgba(0,0,0,0.08);
     }
+
+    .danger-zone {
+      margin-top: 48px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .danger-button {
+      width: auto;
+      min-width: 0;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      background: #8892a6;
+    }
   </style>
 </head>
 <body>
@@ -134,7 +150,10 @@
   <div id="result" class="result"></div>
 
   <div id="hiscore" class="hiscore"></div>
-  <button id="resetBtn" type="button" style="background:#8892a6;">ランキングをリセット</button>
+
+  <div class="danger-zone" aria-label="ランキング管理">
+    <button id="resetBtn" class="danger-button" type="button">ランキングをリセット</button>
+  </div>
 </div>
 
 <script src="../../shared/storage.js"></script>
@@ -188,7 +207,7 @@
         ts: safeNumber(x?.ts)
       })).filter(r => r.elapsed !== null && r.diff !== null && r.ts !== null);
 
-      return cleaned.slice(0, 200); // 念のため
+      return cleaned.sort(compareRecord).slice(0, MAX_RANK);
     } catch {
       return [];
     }
@@ -282,12 +301,10 @@
     timeDisplay.textContent = elapsed.toFixed(3) + " 秒";
     resultDisplay.textContent = `誤差：${diff.toFixed(3)} 秒`;
 
-    const beforeTop10 = [...rankings].sort(compareRecord).slice(0, MAX_RANK);
-
     const newRec = { elapsed, diff, ts: Date.now() };
     const merged = [...rankings, newRec].sort(compareRecord).slice(0, MAX_RANK);
 
-    const entered = JSON.stringify(beforeTop10) !== JSON.stringify(merged);
+    const entered = merged.some(r => r === newRec);
 
     if (entered) {
       rankings = merged;
@@ -348,10 +365,15 @@
     if (isRunning) return;
 
     SafeStorage.remove(RANK_KEY);
+    SafeStorage.remove(LEGACY_RANK_KEY);
     rankings = [];
     renderRankings(rankings);
     resultDisplay.textContent = "ランキングをリセットしました";
   }
+
+  let rankings = loadRankings();
+  saveRankings(rankings);
+  renderRankings(rankings);
 
   resetBtn.addEventListener('pointerdown', resetRanking);
   resetBtn.addEventListener('click', resetRanking);
