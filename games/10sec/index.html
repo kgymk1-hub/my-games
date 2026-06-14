@@ -9,7 +9,7 @@
     body {
       margin: 0;
 
-      /* ★修正: ランキングが増えても上がはみ出さないように、中央固定をやめてスクロール可能に */
+      /* ランキングが増えても画面上部から確認できるようにする。 */
       min-height: 100vh;
       height: auto;
       display: flex;
@@ -22,7 +22,7 @@
       background: #e9eef8;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-      /* 追加: 連打時などのテキスト範囲選択を防いで没入感UP */
+      /* 連打時の意図しないテキスト選択を防ぐ。 */
       user-select: none;
       -webkit-user-select: none;
     }
@@ -34,7 +34,7 @@
       box-shadow: 0 8px 20px rgba(0,0,0,0.1);
       text-align: center;
 
-      /* ★修正: 端末幅に合わせて縮む */
+      /* 小さい端末では画面幅に合わせて縮める。 */
       width: min(360px, 100%);
       box-sizing: border-box;
     }
@@ -89,7 +89,7 @@
       text-align: left;
       line-height: 1.35;
 
-      /* 追加: ランキングはコピーできる方が親切 */
+      /* 記録をコピーできるようランキング欄だけ選択可能にする。 */
       user-select: text;
       -webkit-user-select: text;
     }
@@ -167,12 +167,12 @@
   const hiscoreDisplay = document.getElementById('hiscore');
   const resetBtn = document.getElementById('resetBtn');
 
-  // ---- ランキング保存キー（上位10件）----
+  // ランキングは上位10件を端末内に保存する。
   const RANK_KEY = "myGames:tenSecChallenge:rankings:v2";
   const LEGACY_RANK_KEY = "tenSecChallenge_rankings_v2";
   const MAX_RANK = 10;
 
-  // ---- 二重発火防止（pointerdown→click など）----
+  // pointerdown と click の連続発火を抑える。
   let lastActionAt = 0;
   const ACTION_GUARD_MS = 350;
 
@@ -217,14 +217,14 @@
     SafeStorage.set(RANK_KEY, JSON.stringify(ranks));
   }
 
-  // diff 小さいほど上位。完全同点なら elapsed 小さい方を上位（好みで変更OK）。
+  // 誤差が小さい順、同点なら計測時間が短い順に並べる。
   function compareRecord(a, b) {
     if (a.diff !== b.diff) return a.diff - b.diff;
     if (a.elapsed !== b.elapsed) return a.elapsed - b.elapsed;
     return a.ts - b.ts;
   }
 
-  // ★修正: ハイスコア表示を廃止して「上位10位のリスト」だけ表示
+  // 上位記録をリスト形式で表示する。
   function renderRankings(ranks) {
     const sorted = [...ranks].sort(compareRecord).slice(0, MAX_RANK);
     hiscoreDisplay.textContent = "";
@@ -318,13 +318,13 @@
 
   function triggerAction(srcEvent) {
     if (srcEvent) {
-      // preventDefault は touch/pen のみに限定（mouse は基本触らない）
+      // タッチ操作だけブラウザ既定動作を抑える。
       if (srcEvent.type === "pointerdown") {
         if (srcEvent.pointerType === "touch" || srcEvent.pointerType === "pen") {
           srcEvent.preventDefault();
         }
       } else if (srcEvent.type === "keydown") {
-        // キーボードはスクロール等を止めたいので preventDefault
+        // Space キーによるスクロールを防ぐ。
         srcEvent.preventDefault();
       }
     }
@@ -335,25 +335,25 @@
     else handleStop();
   }
 
-  // pointerdown（体感ラグ低減）
+  // タッチ開始時に反応させて入力遅延を減らす。
   mainBtn.addEventListener('pointerdown', (e) => triggerAction(e));
 
-  // click（キーボードEnter/Space救済 + 環境差フォールバック）
+  // click はキーボード操作と環境差のフォールバック。
   mainBtn.addEventListener('click', (e) => triggerAction(e));
 
-  // ★修正: キーボード操作の競合を回避（操作可能要素にフォーカスがある時はグローバルショートカットしない）
+  // 操作要素にフォーカスがあるときは要素本来のキー操作を優先する。
   document.addEventListener('keydown', (e) => {
     const k = e.key;
     if (!(k === "Enter" || k === " " || k === "Spacebar")) return;
 
-    // フォーカスが「ボタン/リンク/入力」等の操作要素にある場合は、その要素本来の挙動に任せる
+    // ボタンや入力欄ではグローバルショートカットを無効にする。
     const t = e.target;
     if (t && typeof t.closest === "function") {
       const interactive = t.closest('button, a, input, textarea, select, summary, [role="button"], [contenteditable="true"]');
       if (interactive) return;
     }
 
-    // それ以外（背景等にフォーカス）ならゲーム開始/停止のショートカットとして使う
+    // 背景フォーカス時だけ開始・停止ショートカットとして扱う。
     triggerAction(e);
   }, { passive: false });
 

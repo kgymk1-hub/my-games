@@ -228,7 +228,7 @@
       display: block;
       border-radius: 12px;
       touch-action: none;
-      outline: none; /* FIX: remove browser focus ring */
+      outline: none; /* キーボード操作時は独自のフォーカス表示を描画する。 */
     }
 
     .footer {
@@ -393,7 +393,7 @@
     const VOLUME_STORAGE_KEY = 'hexMines:volume';
     const SOLVABLE_STORAGE_KEY = 'hexMines:solvable';
 
-    // NEW: remember last played size + density
+    // 最後に選んだ盤面サイズと地雷密度を保存する。
     const LAST_SIZE_STORAGE_KEY = 'hexMines:lastSize';
     const LAST_DENSITY_STORAGE_KEY = 'hexMines:lastDensity';
 
@@ -409,11 +409,11 @@
       defaultLabel: resetBestBtn.textContent
     };
 
-    // FIX: track last interaction source to avoid showing keyboard focus outline on first tap
+    // タップ直後にキーボード用フォーカスを出さないため入力種別を記録する。
     let lastInteraction = 'pointer'; // 'pointer' | 'keyboard'
     document.addEventListener('keydown', () => { lastInteraction = 'keyboard'; }, { passive: true, capture: true });
 
-    // ---------- NEW: persist last size/density ----------
+    // ---------- 盤面設定の保存 ----------
     function safeGet(key) {
       try { return SafeStorage.get(key); } catch (_) { return null; }
     }
@@ -495,7 +495,7 @@
         boomFx = null;
         chordFailFx = null;
 
-        // FIX: always fit board on reset (restart / size change / initial)
+        // リセット時は常に盤面を表示領域へ収める。
         if (game) {
           fitBoard();
           requestRender();
@@ -1533,7 +1533,7 @@
         ctx.restore();
       }
 
-      // FIX: only show keyboard focus hex when user actually used keyboard
+      // キーボード操作時だけフォーカス中のヘックスを表示する。
       if (isKeyboardActive && renderer.keyboardCell && lastInteraction === 'keyboard') {
         const { x, y } = offsetToPixel(renderer.keyboardCell.col, renderer.keyboardCell.row);
         ctx.save();
@@ -1901,12 +1901,12 @@
     }
 
     canvas.addEventListener('pointerdown', event => {
-      lastInteraction = 'pointer'; // FIX: pointer interaction
+      lastInteraction = 'pointer';
       if (event.pointerType === 'mouse' && event.button === 2) return;
 
       unlockAudioNow();
 
-      // FIX: avoid showing keyboard focus hex due to tap-focus
+      // タップ由来のフォーカスではキーボード用カーソルを表示しない。
       isKeyboardActive = false;
       renderer.keyboardCell = null;
 
@@ -2095,7 +2095,7 @@
     canvas.addEventListener('contextmenu', event => event.preventDefault());
 
     canvas.addEventListener('focus', () => {
-      // FIX: only treat as keyboard navigation if focus came from keyboard
+      // キーボード由来のフォーカスだけナビゲーションとして扱う。
       if (lastInteraction !== 'keyboard') {
         isKeyboardActive = false;
         renderer.keyboardCell = null;
@@ -2157,7 +2157,7 @@
         game.stopTimer();
         game.reset(getConfigFromControls());
         setMode('open');
-        resizeCanvas(true); // FIX: force fit
+        resizeCanvas(true);
         ensureKeyboardCell();
         handled = true;
       } else if (key === '+' || key === '=') {
@@ -2194,7 +2194,7 @@
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas(true); // FIX: force fit even if canvas size unchanged
+      resizeCanvas(true); even if canvas size unchanged
       announceMessage('Restarted.');
     });
 
@@ -2216,14 +2216,14 @@
     });
 
     function handleConfigChange() {
-      // NEW: remember size/density whenever changed (and used next time)
+      // 変更した設定を次回起動時にも使う。
       rememberCurrentConfigFromControls();
 
       resetResetBestPrompt();
       game.stopTimer();
       game.reset(getConfigFromControls());
       setMode('open');
-      resizeCanvas(true); // FIX: force fit on size/density change
+      resizeCanvas(true); on size/density change
       announceMessage('New game settings applied.');
     }
 
@@ -2257,7 +2257,7 @@
       applyVolumeUI(v01);
     });
 
-    window.addEventListener('resize', () => resizeCanvas(true)); // FIX: keep fitting on resize/orientation
+    window.addEventListener('resize', () => resizeCanvas(true));
 
     function shuffle(arr) {
       for (let i = arr.length - 1; i > 0; i--) {
@@ -2275,7 +2275,7 @@
       }
     }
 
-    // ---------- NEW: apply persisted config BEFORE creating game ----------
+    // ---------- 保存済み設定をゲーム生成前に反映 ----------
     applyPersistedConfigToControls();
     rememberCurrentConfigFromControls(); // ensure defaults are stored at least once
 
