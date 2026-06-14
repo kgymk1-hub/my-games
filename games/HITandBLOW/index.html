@@ -208,9 +208,11 @@
       background:#f6f7fb;
     }
 
-    /* 記録消去：押し間違い防止で“遠い位置”（下の方） */
+    /* 記録消去：押し間違い防止で画面最下部に小さく配置 */
     .danger-zone{
-      margin-top: 14px;
+      margin-top: 36px;
+      padding-top: 12px;
+      border-top: 1px solid #eef1f7;
       display:flex;
       justify-content:flex-end;
     }
@@ -218,8 +220,10 @@
       background:#fde7ea;
       color:#8c2b35;
       border: 1px solid #f6c9d0;
-      padding: 10px 12px;
-      border-radius: 12px;
+      padding: 5px 8px;
+      border-radius: 10px;
+      font-size: 0.74rem;
+      opacity: 0.82;
     }
 
     /* ルール：折りたたみで場所を取らない＋重なり回避 */
@@ -323,9 +327,6 @@
         </div>
       </div>
 
-      <div class="danger-zone">
-        <button id="clearStatsButton" type="button">記録を消去</button>
-      </div>
     </div>
 
     <details class="rules">
@@ -343,6 +344,10 @@
 
     <div class="answer-hint" id="showAnswerHint">
       （どうしても分からないときは <span>答えを見る</span>）
+    </div>
+
+    <div class="danger-zone" aria-label="記録管理">
+      <button id="clearStatsButton" type="button">記録を消去</button>
     </div>
   </div>
 

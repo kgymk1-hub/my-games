@@ -310,6 +310,20 @@
       color: #9ca3b8;
       line-height: 1.35;
     }
+
+    .danger-zone {
+      margin-top: 32px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .danger-zone .btn-warn {
+      padding: 5px 8px;
+      font-size: 0.72rem;
+      opacity: 0.86;
+    }
   </style>
 </head>
 <body>
@@ -346,7 +360,6 @@
         <button id="newGameBtn">ニューゲーム</button>
         <button id="undoBtn" class="btn-secondary" disabled>Undo</button>
         <button id="redoBtn" class="btn-secondary" disabled>Redo</button>
-        <button id="resetHighBtn" class="btn-warn">この設定のハイスコア消去</button>
       </div>
     </div>
 
@@ -360,6 +373,10 @@
     <div class="small-note">
       <div>※n個消しのスコア = n × n × 5</div>
       <div id="perfectNote">※全消しボーナス = —</div>
+    </div>
+
+    <div class="danger-zone" aria-label="ハイスコア管理">
+      <button id="resetHighBtn" class="btn-warn">この設定のハイスコア消去</button>
     </div>
   </div>
 
