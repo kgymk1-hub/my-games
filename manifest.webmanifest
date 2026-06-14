@@ -1,0 +1,21 @@
+{
+  "name": "ブラウザゲーム集",
+  "short_name": "ゲーム集",
+  "description": "端末にインストールしてオフラインでも遊べるブラウザゲーム集です。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f7fb",
+  "theme_color": "#5b6cff",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

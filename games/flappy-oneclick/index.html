@@ -121,6 +121,11 @@
       }
     }
   </style>
+  <meta name="theme-color" content="#5b6cff" />
+  <link rel="manifest" href="../../manifest.webmanifest" />
+  <link rel="icon" href="../../icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="../../icons/icon.svg" />
+
 </head>
 <body>
   <canvas id="game" role="img" aria-label="Flappy One-Click board. Click, tap, or press Space to flap and avoid pipes."></canvas>
@@ -584,5 +589,7 @@
     muteBtn.setAttribute("aria-label", muted ? "Turn sound on" : "Turn sound off");
     animationId = requestAnimationFrame(tick);
   </script>
+  <script src="../../shared/pwa.js"></script>
+
 </body>
 </html>
