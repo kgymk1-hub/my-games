@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>さめがめ（サイズ＆色数選択可）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
@@ -362,13 +363,15 @@
     </div>
   </div>
 
-  <script>
+  <script src="../../shared/storage.js"></script>
+<script>
     // ===== 定数 =====
     const SCORE_FACTOR = 5;
     const PERFECT_FACTOR = 10;          // 全消しボーナス = (横×縦×PERFECT_FACTOR)
     const INIT_TRY_LIMIT = 300;         // 初期盤面生成のリトライ上限
     const HISTORY_LIMIT = 80;           // Undo/Redoの履歴上限
-    const LAST_SETTINGS_KEY = "samegameLastSettings_v2";
+    const LAST_SETTINGS_KEY = "myGames:samegame:lastSettings:v2";
+    const LEGACY_LAST_SETTINGS_KEY = "samegameLastSettings_v2";
 
     // 色覚多様性：色ごとの記号（色数に応じて先頭から使う）
     const SYMBOLS = ["●", "■", "▲", "★", "◆", "✦", "✚"];
@@ -418,7 +421,7 @@
 
     // ===== ユーティリティ =====
     function getHighScoreKey(cols, rows, colors) {
-      return `samegameHighScore_${cols}x${rows}_c${colors}`;
+      return `myGames:samegame:highScore:${cols}x${rows}:c${colors}:v1`;
     }
 
     function deepCopyBoard(b) {
@@ -447,18 +450,18 @@
     }
 
     function loadHighScore() {
-      const raw = localStorage.getItem(HIGH_KEY);
+      const raw = SafeStorage.get(HIGH_KEY);
       const val = raw ? parseInt(raw, 10) : 0;
       highScoreEl.textContent = isNaN(val) ? 0 : String(val);
     }
 
     function saveHighScoreIfNeeded() {
-      const raw = localStorage.getItem(HIGH_KEY);
+      const raw = SafeStorage.get(HIGH_KEY);
       const current = raw ? parseInt(raw, 10) : 0;
       const hi = isNaN(current) ? 0 : current;
 
       if (score > hi) {
-        localStorage.setItem(HIGH_KEY, String(score));
+        SafeStorage.set(HIGH_KEY, String(score));
         highScoreEl.textContent = String(score);
       }
     }
@@ -560,7 +563,7 @@
 
     function loadLastSettingsIntoUI() {
       try {
-        const raw = localStorage.getItem(LAST_SETTINGS_KEY);
+        const raw = SafeStorage.get(LAST_SETTINGS_KEY) || SafeStorage.get(LEGACY_LAST_SETTINGS_KEY);
         if (!raw) return;
         const obj = JSON.parse(raw);
         if (!obj || typeof obj !== "object") return;
@@ -573,7 +576,7 @@
     function saveLastSettingsFromUI() {
       const s = readSettingsFromUI();
       const payload = { size: s.sizeVal, colors: s.colorVal };
-      localStorage.setItem(LAST_SETTINGS_KEY, JSON.stringify(payload));
+      SafeStorage.set(LAST_SETTINGS_KEY, JSON.stringify(payload));
     }
 
     function applySettingsFromUI() {
@@ -637,37 +640,44 @@
     }
 
     // ===== 描画 =====
-    function renderBoard() {
-      gridEl.innerHTML = "";
+    function ensureBoardCells() {
+      const expected = ROWS * COLS;
+      if (gridEl.children.length === expected) return;
+      gridEl.textContent = "";
+      for (let i = 0; i < expected; i++) {
+        const cell = document.createElement("div");
+        const inner = document.createElement("div");
+        inner.className = "cell-inner";
+        cell.className = "cell";
+        cell.appendChild(inner);
+        const symEl = document.createElement("div");
+        symEl.className = "symbol";
+        cell.appendChild(symEl);
+        gridEl.appendChild(cell);
+      }
+    }
 
+    function renderBoard() {
+      ensureBoardCells();
       const symList = SYMBOLS.slice(0, Math.max(1, COLORS));
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-          const cell = document.createElement("div");
-          const inner = document.createElement("div");
-          inner.className = "cell-inner";
-          cell.appendChild(inner);
-
-          cell.classList.add("cell");
-
+          const cell = gridEl.children[idxOf(r, c)];
+          const symEl = cell.querySelector(".symbol");
           const v = board[r][c];
+
+          cell.className = "cell";
+          cell.dataset.row = String(r);
+          cell.dataset.col = String(c);
+
           if (v === null) {
             cell.classList.add("empty");
+            symEl.textContent = "";
           } else {
             cell.classList.add(`color-${v}`);
-            cell.dataset.row = String(r);
-            cell.dataset.col = String(c);
-
-            // 記号（色覚多様性）
-            const sym = symList[v] ?? symList[v % symList.length] ?? "●";
-            const symEl = document.createElement("div");
-            symEl.className = "symbol";
-            symEl.textContent = sym;
-            cell.appendChild(symEl);
+            symEl.textContent = symList[v] ?? symList[v % symList.length] ?? "●";
           }
-
-          gridEl.appendChild(cell);
         }
       }
     }
@@ -922,7 +932,7 @@
     function resetHighScore() {
       if (isResolving) return;
       if (!confirm("今のサイズ＆色数のハイスコアをリセットしますか？")) return;
-      localStorage.removeItem(HIGH_KEY);
+      SafeStorage.remove(HIGH_KEY);
       loadHighScore();
     }
 

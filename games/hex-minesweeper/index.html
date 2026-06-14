@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>Hex Minesweeper</title>
   <style>
     :root {
@@ -331,7 +332,9 @@
     </div>
   </div>
 
-  <script>
+  <script src="../../shared/storage.js"></script>
+<script src="../../shared/audio.js"></script>
+<script>
     const canvas = document.getElementById('board');
     const ctx = canvas.getContext('2d');
 
@@ -412,10 +415,10 @@
 
     // ---------- NEW: persist last size/density ----------
     function safeGet(key) {
-      try { return localStorage.getItem(key); } catch (_) { return null; }
+      try { return SafeStorage.get(key); } catch (_) { return null; }
     }
     function safeSet(key, value) {
-      try { localStorage.setItem(key, value); } catch (_) {}
+      try { SafeStorage.set(key, value); } catch (_) {}
     }
     function hasOptionValue(selectEl, value) {
       return Array.from(selectEl.options).some(opt => opt.value === value);
@@ -529,6 +532,10 @@
 
         const minesToPlace = Math.min(this.totalMines, candidates.length);
         const maxAttempts = solvableToggle.checked ? 30 : 1;
+        const generationStartedAt = performance.now();
+        if (solvableToggle.checked) {
+          statusEl.textContent = "解ける盤面を生成中...";
+        }
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           for (let row = 0; row < this.H; row++) {
             for (let col = 0; col < this.W; col++) {
@@ -542,6 +549,10 @@
           this.totalMines = minesToPlace;
           this.computeNumbers();
           if (!solvableToggle.checked || isSolvableByLogic(this, startCell)) {
+            break;
+          }
+          if (performance.now() - generationStartedAt > 120) {
+            statusEl.textContent = "生成が重いため通常盤面で開始します。";
             break;
           }
         }
@@ -777,18 +788,18 @@
     }
 
     function storageKey(config) {
-      return `hexMinesBest:${configKey(config)}`;
+      return `myGames:hexMinesweeper:bestTime:${configKey(config)}:v1`;
     }
 
     function getBestTime(config) {
-      const stored = localStorage.getItem(storageKey(config));
+      const stored = SafeStorage.get(storageKey(config));
       if (!stored) return null;
       const value = Number.parseInt(stored, 10);
       return Number.isFinite(value) ? value : null;
     }
 
     function setBestTime(config, value) {
-      localStorage.setItem(storageKey(config), value.toString());
+      SafeStorage.set(storageKey(config), value.toString());
     }
 
     function maybeUpdateBestTime(elapsed) {
@@ -798,33 +809,33 @@
     }
 
     function getVibrationEnabled() {
-      const stored = localStorage.getItem(VIBRATION_STORAGE_KEY);
+      const stored = SafeStorage.get(VIBRATION_STORAGE_KEY);
       if (stored === null) return true;
       return stored === '1';
     }
 
     function setVibrationEnabled(isEnabled) {
-      localStorage.setItem(VIBRATION_STORAGE_KEY, isEnabled ? '1' : '0');
+      SafeStorage.set(VIBRATION_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
     function getSoundEnabled() {
-      const stored = localStorage.getItem(SOUND_STORAGE_KEY);
+      const stored = SafeStorage.get(SOUND_STORAGE_KEY);
       if (stored === null) return true;
       return stored === '1';
     }
 
     function setSoundEnabled(isEnabled) {
-      localStorage.setItem(SOUND_STORAGE_KEY, isEnabled ? '1' : '0');
+      SafeStorage.set(SOUND_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
     function getSolvableEnabled() {
-      const stored = localStorage.getItem(SOLVABLE_STORAGE_KEY);
+      const stored = SafeStorage.get(SOLVABLE_STORAGE_KEY);
       if (stored === null) return true;
       return stored === '1';
     }
 
     function setSolvableEnabled(isEnabled) {
-      localStorage.setItem(SOLVABLE_STORAGE_KEY, isEnabled ? '1' : '0');
+      SafeStorage.set(SOLVABLE_STORAGE_KEY, isEnabled ? '1' : '0');
     }
 
     function clamp01(v) {
@@ -832,14 +843,14 @@
     }
 
     function getVolume() {
-      const stored = localStorage.getItem(VOLUME_STORAGE_KEY);
+      const stored = SafeStorage.get(VOLUME_STORAGE_KEY);
       if (stored === null) return 1;
       const v = Number.parseFloat(stored);
       return Number.isFinite(v) ? clamp01(v) : 1;
     }
 
     function setVolume(v01) {
-      localStorage.setItem(VOLUME_STORAGE_KEY, clamp01(v01).toString());
+      SafeStorage.set(VOLUME_STORAGE_KEY, clamp01(v01).toString());
     }
 
     function applyVolumeUI(v01) {
@@ -2191,7 +2202,7 @@
       unlockAudioNow();
       if (resetBestState.armed) {
         const config = getConfigFromControls();
-        localStorage.removeItem(storageKey(config));
+        SafeStorage.remove(storageKey(config));
         resetResetBestPrompt();
         updateUI();
         announceMessage('Best time reset.');

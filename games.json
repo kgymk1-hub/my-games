@@ -1,0 +1,58 @@
+[
+  {
+    "title": "10秒チャレンジ",
+    "desc": "体感10秒を狙うシンプルゲーム。誤差が小さいほど高スコア。",
+    "path": "games/10sec/index.html",
+    "tags": ["10秒", "短時間", "タイミング"],
+    "lang": "ja"
+  },
+  {
+    "title": "さめがめ",
+    "desc": "同じ色のブロックがくっついた塊を選んで消す。まとめて消すと高得点。",
+    "path": "games/samegame/index.html",
+    "tags": ["消去パズル", "同色連結", "スコアアタック"],
+    "lang": "ja"
+  },
+  {
+    "title": "Lights Out",
+    "desc": "マスを押すと自分と周囲の灯りが反転。すべての灯りを消すとクリア。",
+    "path": "games/lightout/index.html",
+    "tags": ["論理パズル", "脳トレ", "数学的思考"],
+    "lang": "ja"
+  },
+  {
+    "title": "HITandBLOW",
+    "desc": "位置も数字も当たればHIT、数字だけ当たればBLOW。数字当てゲーム。",
+    "path": "games/HITandBLOW/index.html",
+    "tags": ["論理ゲーム", "推理", "数字当て"],
+    "lang": "ja"
+  },
+  {
+    "title": "Slide Block",
+    "desc": "アイシテルニイガタを完成させるスライドブロックパズル。",
+    "path": "games/Slide Block/index.html",
+    "tags": ["スライドブロック", "パズル"],
+    "lang": "ja"
+  },
+  {
+    "title": "2048",
+    "desc": "同じ数字タイルを合体させて2048以上を目指す定番パズル。",
+    "path": "games/2048/index.html",
+    "tags": ["数字パズル", "合体", "スコアアタック"],
+    "lang": "ja"
+  },
+  {
+    "title": "Hex Minesweeper",
+    "desc": "六角形の盤面で地雷を避けながら安全マスを開くマインスイーパー。",
+    "path": "games/hex-minesweeper/index.html",
+    "tags": ["マインスイーパー", "六角形", "論理パズル"],
+    "lang": "ja"
+  },
+  {
+    "title": "Flappy One-Click",
+    "desc": "クリック・タップ・Spaceだけで鳥を飛ばし、パイプを避けるワンボタンゲーム。",
+    "path": "games/flappy-oneclick/index.html",
+    "tags": ["アクション", "ワンボタン", "反射神経"],
+    "lang": "ja"
+  }
+]

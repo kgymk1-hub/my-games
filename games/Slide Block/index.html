@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
+  <link rel="stylesheet" href="../../shared/common.css" />
   <title>アイシテルニイガタパズル</title>
   <style>
     :root{
@@ -375,6 +376,9 @@
 
   <canvas id="confetti"></canvas>
 
+<script src="../../shared/storage.js"></script>
+<script src="../../shared/audio.js"></script>
+<script src="../../shared/resize.js"></script>
 <script>
 /* =========================================================
    TEAM COLORS (approx primary colors)
@@ -590,10 +594,10 @@ const Sound = {
 };
 
 function loadSoundSettings(){
-  const bgm = localStorage.getItem('aishiteru_bgm');
-  const se  = localStorage.getItem('aishiteru_se');
-  const bgmVol = localStorage.getItem('aishiteru_bgm_vol');
-  const seVol  = localStorage.getItem('aishiteru_se_vol');
+  const bgm = SafeStorage.get('myGames:slideBlock:bgm:v1');
+  const se  = SafeStorage.get('myGames:slideBlock:se:v1');
+  const bgmVol = SafeStorage.get('myGames:slideBlock:bgmVolume:v1');
+  const seVol  = SafeStorage.get('myGames:slideBlock:seVolume:v1');
 
   Sound.bgmEnabled = (bgm === 'on');
   Sound.seEnabled  = (se !== 'off');
@@ -614,18 +618,18 @@ function updateSoundUI(){
 
   if(Sound.bgmEnabled && Sound.bgmVol > 0){
     btnBGM.classList.add('active');
-    btnBGM.innerHTML = '<span>♪</span> BGM: ON';
+    btnBGM.textContent = '♪ BGM: ON';
   }else{
     btnBGM.classList.remove('active');
-    btnBGM.innerHTML = '<span>♪</span> BGM: OFF';
+    btnBGM.textContent = '♪ BGM: OFF';
   }
 
   if(Sound.seEnabled && Sound.seVol > 0){
     btnSE.classList.add('active');
-    btnSE.innerHTML = '<span>🔊</span> 効果音: ON';
+    btnSE.textContent = '🔊 効果音: ON';
   }else{
     btnSE.classList.remove('active');
-    btnSE.innerHTML = '<span>🔈</span> 効果音: OFF';
+    btnSE.textContent = '🔈 効果音: OFF';
   }
 
   Sound.applyVolumes();
@@ -634,7 +638,7 @@ function updateSoundUI(){
 function toggleBGM(){
   Sound.init();
   Sound.bgmEnabled = !Sound.bgmEnabled;
-  localStorage.setItem('aishiteru_bgm', Sound.bgmEnabled ? 'on' : 'off');
+  SafeStorage.set('myGames:slideBlock:bgm:v1', Sound.bgmEnabled ? 'on' : 'off');
   Sound.applyVolumes();
   if(Sound.bgmEnabled && Sound.bgmVol>0) Sound.startBGM(); else Sound.stopBGM();
   updateSoundUI();
@@ -643,7 +647,7 @@ function toggleBGM(){
 function toggleSE(){
   Sound.init();
   Sound.seEnabled = !Sound.seEnabled;
-  localStorage.setItem('aishiteru_se', Sound.seEnabled ? 'on' : 'off');
+  SafeStorage.set('myGames:slideBlock:se:v1', Sound.seEnabled ? 'on' : 'off');
   Sound.applyVolumes();
   if(Sound.seEnabled && Sound.seVol>0) Sound.playMove();
   updateSoundUI();
@@ -651,7 +655,7 @@ function toggleSE(){
 
 function setBgmVol(v){
   Sound.bgmVol = Math.max(0, Math.min(10, parseInt(v,10)));
-  localStorage.setItem('aishiteru_bgm_vol', String(Sound.bgmVol));
+  SafeStorage.set('myGames:slideBlock:bgmVolume:v1', String(Sound.bgmVol));
   document.getElementById('bgm-val').textContent = String(Sound.bgmVol);
 
   Sound.init();
@@ -662,7 +666,7 @@ function setBgmVol(v){
 
 function setSeVol(v){
   Sound.seVol = Math.max(0, Math.min(10, parseInt(v,10)));
-  localStorage.setItem('aishiteru_se_vol', String(Sound.seVol));
+  SafeStorage.set('myGames:slideBlock:seVolume:v1', String(Sound.seVol));
   document.getElementById('se-val').textContent = String(Sound.seVol);
 
   Sound.init();
@@ -676,8 +680,8 @@ function setSeVol(v){
 const COLS=6, ROWS=5, UNIT=60;
 
 const MODES = {
-  up:   { label:'J1昇格',  storageBest:'aishiteru_best_up'   },
-  champ:{ label:'J1優勝',  storageBest:'aishiteru_best_champ'}
+  up:   { label:'J1昇格',  storageBest:'myGames:slideBlock:best:up:v1'   },
+  champ:{ label:'J1優勝',  storageBest:'myGames:slideBlock:best:champ:v1'}
 };
 
 const START_MAIN_X = 4;
@@ -802,27 +806,28 @@ function fitBoard(){
   wrapper.style.width  = `${baseW * scale}px`;
   wrapper.style.height = `${baseH * scale}px`;
 }
+const scheduleFitBoard = window.createRafScheduler ? createRafScheduler(fitBoard) : fitBoard;
 window.addEventListener('load', fitBoard);
-window.addEventListener('resize', fitBoard);
+window.addEventListener('resize', scheduleFitBoard);
 
 function getBestKey(){ return MODES[mode].storageBest; }
 
 function loadBest(){
-  const v = localStorage.getItem(getBestKey());
+  const v = SafeStorage.get(getBestKey());
   el.best.textContent = v ? v : '-';
 }
 function saveBest(score){
   const key = getBestKey();
-  const cur = localStorage.getItem(key);
+  const cur = SafeStorage.get(key);
   if(!cur || score < parseInt(cur,10)){
-    localStorage.setItem(key, String(score));
+    SafeStorage.set(key, String(score));
     el.best.textContent = String(score);
   }
 }
 
 function clearBestScore(){
   if(confirm('現在のモードの記録を消去しますか？')){
-    localStorage.removeItem(getBestKey());
+    SafeStorage.remove(getBestKey());
     el.best.textContent = '-';
   }
 }
@@ -1075,7 +1080,7 @@ function fitLabelToBlock(blockEl, labelEl){
 }
 
 function render(){
-  el.board.innerHTML = '';
+  el.board.textContent = '';
 
   const blockEls = [];
 
@@ -1136,7 +1141,7 @@ function render(){
         moves.forEach(m=>{
           const a = document.createElement('div');
           a.className = `arrow-btn ${m.cls}`;
-          a.innerHTML = m.ch;
+          a.textContent = m.ch;
           a.onclick = (e)=>{
             e.stopPropagation();
             doMove(i, m.dx, m.dy);
@@ -1268,8 +1273,8 @@ function scrambleWalkCollect(maxSteps){
 
 // ★直前と同じ盤面のときだけ再生成し、必ず「右下スタート＋100回以上崩し」を満たす
 function generateSolvablePuzzleUnique(){
-  const lastKeyStore = `aishiteru_last_generated_state_${mode}`;
-  const lastKey = localStorage.getItem(lastKeyStore) || '';
+  const lastKeyStore = `myGames:slideBlock:lastGeneratedState:${mode}:v1`;
+  const lastKey = SafeStorage.get(lastKeyStore) || '';
 
   for(let tries=0; tries<120; tries++){
     blocks = deepCopy(goalBase[mode]);
@@ -1284,7 +1289,7 @@ function generateSolvablePuzzleUnique(){
     const key = packStateBigInt(blocks).toString(36);
     if(key === lastKey) continue;
 
-    localStorage.setItem(lastKeyStore, key);
+    SafeStorage.set(lastKeyStore, key);
     return;
   }
 
@@ -1298,7 +1303,7 @@ function generateSolvablePuzzleUnique(){
 
       const key = packStateBigInt(blocks).toString(36);
       if(key !== lastKey){
-        localStorage.setItem(lastKeyStore, key);
+        SafeStorage.set(lastKeyStore, key);
         return;
       }
     }
@@ -1307,7 +1312,7 @@ function generateSolvablePuzzleUnique(){
   // 念のため
   assignNamesByProximity();
   const fallbackKey = packStateBigInt(blocks).toString(36);
-  localStorage.setItem(lastKeyStore, fallbackKey);
+  SafeStorage.set(lastKeyStore, fallbackKey);
 }
 
 /* =========================================================
@@ -1347,8 +1352,8 @@ function startSolver(){
   }
 
   const stateKey = packStateBigInt(blocks).toString(36);
-  const cacheKey = `aishiteru_cache_${mode}_${stateKey}`;
-  const cached = localStorage.getItem(cacheKey);
+  const cacheKey = `myGames:slideBlock:cache:${mode}:${stateKey}:v1`;
+  const cached = SafeStorage.get(cacheKey);
   if(cached){
     try{
       const moves = JSON.parse(cached);
@@ -1366,7 +1371,7 @@ function startSolver(){
     }catch(_){}
   }
 
-  el.overlaySub.innerHTML = '※端末によっては数秒かかる場合があります<br>（探索中は画面を閉じないでください）';
+  el.overlaySub.replaceChildren('※端末によっては数秒かかる場合があります', document.createElement('br'), '（探索中は画面を閉じないでください）');
   el.overlay.style.display = 'flex';
 
   const token = ++solverCancelToken;
@@ -1828,7 +1833,7 @@ function startSolver(){
     if(!msg) return;
 
     if(msg.cmd === 'progress'){
-      el.overlaySub.innerHTML = `探索中...<br>展開: ${msg.expanded.toLocaleString()}<br>経過: ${msg.elapsed} ms`;
+      el.overlaySub.replaceChildren('探索中...', document.createElement('br'), `展開: ${msg.expanded.toLocaleString()}`, document.createElement('br'), `経過: ${msg.elapsed} ms`);
       return;
     }
 
@@ -1849,7 +1854,7 @@ function startSolver(){
         return;
       }
 
-      try{ localStorage.setItem(cacheKey, JSON.stringify(moves)); }catch(_){}
+      try{ SafeStorage.set(cacheKey, JSON.stringify(moves)); }catch(_){}
 
       if(confirm(`${moves.length} 手の解が見つかりました。\n（※最短保証はありません）\n\n自動再生しますか？`)){
         isAuto = true;
